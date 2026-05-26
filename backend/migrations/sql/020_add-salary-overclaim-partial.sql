@@ -1,0 +1,5 @@
+ALTER TABLE salary_records
+  ADD COLUMN IF NOT EXISTS ot_hours_ceiling       NUMERIC(8,2)  NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS excess_ot_hours        NUMERIC(8,2)  NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS overclaim_deduction    NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS partial_leave_deduction NUMERIC(12,2) NOT NULL DEFAULT 0;

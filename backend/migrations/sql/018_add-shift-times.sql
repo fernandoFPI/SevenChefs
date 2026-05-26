@@ -1,0 +1,3 @@
+ALTER TABLE shifts
+  ADD COLUMN IF NOT EXISTS shift_start TIME,
+  ADD COLUMN IF NOT EXISTS shift_end   TIME;

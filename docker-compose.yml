@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  attendance-postgres:
+    image: postgres:15
+    container_name: attendance-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: attendance_db
+      POSTGRES_USER: attendance_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - attendance-network
+
+  attendance-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: attendance-backend
+    restart: always
+    environment:
+      DB_HOST: attendance-postgres
+      DB_PORT: 5432
+      DB_NAME: attendance_db
+      DB_USER: attendance_user
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3000
+      NODE_ENV: production
+      ZK_HOST: ${ZK_HOST}
+      ZK_PORT: ${ZK_PORT}
+      ZK_USERNAME: ${ZK_USERNAME}
+      ZK_PASSWORD: ${ZK_PASSWORD}
+      BACKUP_DIR: /app/backups
+    volumes:
+      - backups_data:/app/backups
+    depends_on:
+      - attendance-postgres
+    networks:
+      - attendance-network
+
+  attendance-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: attendance-frontend
+    restart: always
+    networks:
+      - attendance-network
+
+  attendance-nginx:
+    image: nginx:alpine
+    container_name: attendance-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - attendance-backend
+      - attendance-frontend
+    networks:
+      - attendance-network
+
+volumes:
+  postgres_data:
+  backups_data:
+
+networks:
+  attendance-network:
+    driver: bridge

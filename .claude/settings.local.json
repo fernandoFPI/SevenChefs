@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\(\\); const { Pool } = require\\('pg'\\); const pool = new Pool\\({ connectionString: process.env.DATABASE_URL }\\); pool.query\\('SELECT id, username, role, is_active, password_changed FROM users'\\).then\\(r => { console.log\\(JSON.stringify\\(r.rows, null, 2\\)\\); pool.end\\(\\); }\\).catch\\(e => { console.error\\('DB ERROR:', e.message\\); pool.end\\(\\); }\\);\")",
+      "Bash(psql -U postgres -c \"GRANT ALL ON SCHEMA public TO fernando; GRANT ALL ON DATABASE attendance_db TO fernando;\" attendance_db)",
+      "Bash(node -e \"const bcrypt = require\\('bcrypt'\\); bcrypt.hash\\('admin123', 12\\).then\\(h => console.log\\(h\\)\\);\")",
+      "Bash(node -e ' *)",
+      "Bash(node scripts/migrate.js)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; Write-Host \"Killed PID $_\" })",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique | Where-Object { $_ -ne 0 } | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; Write-Host \"Killed PID $_\" })",
+      "Bash(psql -U postgres -d \"attendance_db\" -c \"GRANT CREATE ON SCHEMA public TO fernando; GRANT USAGE ON SCHEMA public TO fernando;\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PostgreSQL\\\\17\\\\bin\\\\psql.exe\" -U postgres -d attendance_db -c \"GRANT CREATE ON SCHEMA public TO fernando; GRANT USAGE ON SCHEMA public TO fernando;\" 2>&1)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue)",
+      "PowerShell($procs = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -gt 4 } | Select-Object -ExpandProperty OwningProcess -Unique; foreach \\($p in $procs\\) { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue; \"Killed $p\" })",
+      "PowerShell($env:PGPASSWORD = \"admin\"; & \"C:\\\\Program Files\\\\PostgreSQL\\\\17\\\\bin\\\\psql.exe\" -U fernando -d attendance_db -h localhost -c \"DELETE FROM attendance_raw WHERE zk_transaction_id = 1;\" -c \"DELETE FROM attendance_daily WHERE employee_id = \\(SELECT id FROM employees WHERE zk_employee_id = '1'\\) AND date = '2026-05-11';\")",
+      "Bash(PGPASSWORD='Xerox@2026' \"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -U fernando -d attendance_db -h localhost -c \"SELECT e.full_name, s.name AS shift_name, s.std_hours_per_day FROM employees e LEFT JOIN shifts s ON s.id = e.shift_id WHERE e.is_active = true;\")",
+      "Bash(PGPASSWORD='Xerox@2026' \"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -U fernando -d attendance_db -h localhost -c \"SELECT e.name, s.name AS shift_name, s.std_hours_per_day FROM employees e LEFT JOIN shifts s ON s.id = e.shift_id WHERE e.is_active = true;\")",
+      "Bash(PGPASSWORD='Xerox@2026' \"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -U fernando -d attendance_db -h localhost -c \"DELETE FROM attendance_daily WHERE date < '2026-05-01'; SELECT COUNT\\(*\\) AS remaining FROM attendance_daily;\")",
+      "Bash(PGPASSWORD=Xerox@2026 '/c/Program Files/PostgreSQL/18/bin/psql.exe' -U fernando -d attendance_db -h localhost -c ' *)",
+      "Bash(dir /s /b \"c:\\\\Users\\\\PC\\\\OneDrive - Farage Printing Industries\\\\Desktop\\\\SC\\\\frontend\\\\src\\\\lib\")",
+      "Bash(python -c ' *)",
+      "Bash(findstr Dockerfile)"
+    ]
+  }
+}
