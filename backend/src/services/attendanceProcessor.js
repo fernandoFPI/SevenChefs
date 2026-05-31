@@ -245,6 +245,40 @@ async function processAttendance(options = {}) {
 
   const dates = dateRange(from, to);
   if (!dates.length) return 0;
+
+  // Load all active shift swaps that touch this date range.
+  // coverSwapMap:  covering_employee_id + cover_date → swap row (use covered employee's shift)
+  // swapReturnMap: covered_employee_id  + return_date → swap row (mark as SWAP_DAY_OFF)
+  const dateFrom = dates[0];
+  const dateTo   = dates[dates.length - 1];
+  const { rows: swaps } = await db.query(
+    `SELECT
+       ss.covering_employee_id,
+       ss.cover_date::text        AS cover_date,
+       ss.covered_employee_id,
+       ss.swap_return_date::text  AS swap_return_date,
+       ss.type,
+       s.shift_start  AS covered_shift_start,
+       s.shift_end    AS covered_shift_end,
+       s.shift_type   AS covered_shift_type,
+       s.std_hours_per_day AS covered_std_hours
+     FROM shift_swaps ss
+     JOIN employees ce ON ce.id = ss.covered_employee_id
+     LEFT JOIN shifts s ON s.id = ce.shift_id
+     WHERE ss.status = 'ACTIVE'
+       AND ss.cover_date >= $1
+       AND ss.cover_date <= $2`,
+    [dateFrom, dateTo]
+  );
+  const coverSwapMap  = new Map();
+  const swapReturnMap = new Map();
+  for (const swap of swaps) {
+    coverSwapMap.set(`${swap.covering_employee_id}_${swap.cover_date}`, swap);
+    if (swap.swap_return_date) {
+      swapReturnMap.set(`${swap.covered_employee_id}_${swap.swap_return_date}`, swap);
+    }
+  }
+
   let processed = 0;
 
   for (const emp of employees) {
@@ -355,6 +389,45 @@ async function processAttendance(options = {}) {
         dayShiftType  = emp.shift_type;
       }
 
+      // ── Shift swap overrides ──────────────────────────────────────────────────
+      const swapKey   = `${emp.id}_${dateStr}`;
+      const coverSwap = coverSwapMap.get(swapKey);
+      const returnSwap = swapReturnMap.get(swapKey);
+
+      // Covered employee's day off — write SWAP_DAY_OFF and skip punch processing.
+      if (returnSwap) {
+        await db.query(
+          `INSERT INTO attendance_daily
+             (employee_id, date, hours_worked, status, late_hours, ot_hours,
+              ot_approved, late_approved, is_manually_edited, missing_punch, is_shift_cover)
+           VALUES ($1,$2,0,'SWAP_DAY_OFF',0,0,false,false,false,NULL,false)
+           ON CONFLICT (employee_id, date) DO UPDATE SET
+             hours_worked   = 0,
+             status         = 'SWAP_DAY_OFF',
+             late_hours     = 0,
+             ot_hours       = 0,
+             missing_punch  = NULL,
+             is_shift_cover = false,
+             updated_at     = NOW()
+           WHERE attendance_daily.is_manually_edited = false
+             AND attendance_daily.has_punch_correction = false`,
+          [emp.id, dateStr]
+        );
+        processed++;
+        continue;
+      }
+
+      // Covering employee — override shift with the covered employee's shift.
+      let isShiftCover = false;
+      if (coverSwap) {
+        dayShiftStart = coverSwap.covered_shift_start;
+        dayShiftEnd   = coverSwap.covered_shift_end;
+        dayShiftType  = coverSwap.covered_shift_type;
+        dayStdHours   = parseFloat(coverSwap.covered_std_hours) || 8;
+        isWorkday     = true;
+        isShiftCover  = true;
+      }
+
       // For cross-midnight shifts, collect punches spanning two calendar days using
       // a shift window [shiftStart-2h … nextDay+shiftEnd+2h] and track used IDs
       // so a checkout punch isn't counted for both this day and the previous one.
@@ -458,18 +531,19 @@ async function processAttendance(options = {}) {
       await db.query(
         `INSERT INTO attendance_daily
            (employee_id, date, hours_worked, status, late_hours, ot_hours,
-            ot_approved, late_approved, is_manually_edited, missing_punch)
-         VALUES ($1,$2,$3,$4,$5,$6,false,false,false,$7)
+            ot_approved, late_approved, is_manually_edited, missing_punch, is_shift_cover)
+         VALUES ($1,$2,$3,$4,$5,$6,false,false,false,$7,$8)
          ON CONFLICT (employee_id, date) DO UPDATE SET
-           hours_worked  = EXCLUDED.hours_worked,
-           status        = EXCLUDED.status,
-           late_hours    = EXCLUDED.late_hours,
-           ot_hours      = EXCLUDED.ot_hours,
-           missing_punch = EXCLUDED.missing_punch,
-           updated_at    = NOW()
+           hours_worked   = EXCLUDED.hours_worked,
+           status         = EXCLUDED.status,
+           late_hours     = EXCLUDED.late_hours,
+           ot_hours       = EXCLUDED.ot_hours,
+           missing_punch  = EXCLUDED.missing_punch,
+           is_shift_cover = EXCLUDED.is_shift_cover,
+           updated_at     = NOW()
          WHERE attendance_daily.is_manually_edited = false
            AND attendance_daily.has_punch_correction = false`,
-        [emp.id, dateStr, hoursWorked, status, lateHours, otHours, missingPunch]
+        [emp.id, dateStr, hoursWorked, status, lateHours, otHours, missingPunch, isShiftCover]
       );
 
       processed++;
