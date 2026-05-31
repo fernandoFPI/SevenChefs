@@ -94,7 +94,8 @@
     "confirm": "Are you sure?",
     "date": "Date",
     "notes": "Notes",
-    "none": "None"
+    "none": "None",
+    "day": "Day"
   },
   "shifts": {
     "title": "Shift Management",
@@ -128,6 +129,15 @@
       "6": "Sun"
     }
   },
+  "days": {
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday",
+    "sunday": "Sunday"
+  },
   "currency": {
     "IQD": "IQD (Iraqi Dinar)",
     "USD": "USD (US Dollar)"
@@ -148,6 +158,12 @@
     "initialPasswordNote": "The employee's initial password will be their employee code. They will be required to change it on first login.",
     "secondaryShift": "Secondary Shift",
     "combinedHours": "Combined std hours/day",
+    "shiftPattern": "Weekly Shift Pattern",
+    "sameShiftEveryDay": "Same shift every day",
+    "differentShiftPerDay": "Different shift per day",
+    "variableShift": "Variable",
+    "offDay": "Off Day",
+    "shiftPatternNote": "This employee uses a weekly shift pattern. The shift and schedule fields are managed by the pattern below.",
     "noEmployees": "No employees found",
     "passwordChanged": "Password Changed",
     "passwordNotChanged": "Password Not Changed",
@@ -304,6 +320,7 @@
     "approve": "Approve",
     "note": "Note (optional)",
     "noRequests": "No requests found",
+    "autoRejectDisabledBanner": "Auto-reject is disabled. Requests will remain pending until manually actioned.",
     "submitted": "Request submitted successfully",
     "actionDone": "Action completed",
     "confirmReject": "Are you sure you want to reject this request?",
@@ -446,7 +463,11 @@
     "latePenaltyApprovedHint": "Multiplier applied to approved late hours",
     "attendanceWarning": "Changing these settings affects future attendance processing. Use Recalculate on the Attendance Processing page to apply to existing records.",
     "timeOffAllowance": "Annual Time Off Days",
-    "timeOffAllowanceHint": "Number of paid time off days each employee is entitled to per year. Applied to new employees and new year balances. Does not affect existing balances for the current year."
+    "timeOffAllowanceHint": "Number of paid time off days each employee is entitled to per year. Applied to new employees and new year balances. Does not affect existing balances for the current year.",
+    "requestSettings": "Request Settings",
+    "autoRejectEnabled": "Auto-Reject Requests After 24 Hours",
+    "autoRejectEnabledHint": "Requests not approved by admin within 24 hours of submission will be automatically rejected. Applies to all request types: OT, Off, and Time Off requests.",
+    "autoRejectDisabledHint": "Requests will remain pending until manually approved or rejected by the manager and admin. No time limit is enforced."
   },
   "users": {
     "addUser": "Add User",

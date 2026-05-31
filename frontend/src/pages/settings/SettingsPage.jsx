@@ -23,6 +23,7 @@ const DEFAULTS = {
   grace_period_enabled:       'true',
   grace_period_minutes:       '10',
   time_off_allowance_days:    '15',
+  auto_reject_enabled:        'true',
 };
 
 const TABS = ['company', 'zkbio', 'payroll', 'attendance', 'backup', 'users'];
@@ -336,6 +337,7 @@ export default function SettingsPage() {
         grace_period_enabled:     settings.grace_period_enabled,
         grace_period_minutes:     settings.grace_period_minutes,
         time_off_allowance_days:  settings.time_off_allowance_days,
+        auto_reject_enabled:      settings.auto_reject_enabled,
       });
       setLoadedSettings(prev => ({
         ...(prev || DEFAULTS),
@@ -343,6 +345,7 @@ export default function SettingsPage() {
         grace_period_enabled:     settings.grace_period_enabled,
         grace_period_minutes:     settings.grace_period_minutes,
         time_off_allowance_days:  settings.time_off_allowance_days,
+        auto_reject_enabled:      settings.auto_reject_enabled,
       }));
       showToast(t('settings.saved'));
     } catch (e) { showToast(e.message || 'Error'); }
@@ -443,9 +446,11 @@ export default function SettingsPage() {
     settings.ot_calculation_mode      !== loaded.ot_calculation_mode      ||
     settings.grace_period_enabled     !== loaded.grace_period_enabled     ||
     settings.grace_period_minutes     !== loaded.grace_period_minutes     ||
-    settings.time_off_allowance_days  !== loaded.time_off_allowance_days;
+    settings.time_off_allowance_days  !== loaded.time_off_allowance_days  ||
+    settings.auto_reject_enabled      !== loaded.auto_reject_enabled;
 
-  const gracePeriodOn = settings.grace_period_enabled === 'true';
+  const gracePeriodOn    = settings.grace_period_enabled === 'true';
+  const autoRejectOn     = settings.auto_reject_enabled  === 'true';
 
   if (loading) return (
     <div className="space-y-3 animate-pulse max-w-3xl">
@@ -758,6 +763,26 @@ export default function SettingsPage() {
                   <span className="text-sm text-gray-500">{t('common.days', 'days')}</span>
                 </div>
                 <p className="text-xs text-gray-400">{t('settings.timeOffAllowanceHint')}</p>
+              </div>
+
+              {/* Request Settings card */}
+              <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-800">{t('settings.requestSettings')}</p>
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={autoRejectOn}
+                    onClick={() => setSettings(prev => ({ ...prev, auto_reject_enabled: autoRejectOn ? 'false' : 'true' }))}
+                    className={`relative inline-flex h-5 w-10 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none ${autoRejectOn ? 'bg-brand-500' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${autoRejectOn ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                  <span className="text-sm text-gray-700">{t('settings.autoRejectEnabled')}</span>
+                </label>
+                <p className="text-xs text-gray-400">
+                  {autoRejectOn ? t('settings.autoRejectEnabledHint') : t('settings.autoRejectDisabledHint')}
+                </p>
               </div>
 
               {attendanceChanged && (

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import ShiftPatternEditor, { buildDefaultPattern, patternFromApi } from '@/components/ShiftPatternEditor';
 
 const ASSIGNABLE_ROLES = ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'EMPLOYEE'];
 
@@ -25,6 +26,8 @@ export default function EditEmployeePage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [useShiftPattern, setUseShiftPattern] = useState(false);
+  const [shiftPattern, setShiftPattern] = useState(buildDefaultPattern());
 
   useEffect(() => {
     Promise.all([
@@ -32,6 +35,9 @@ export default function EditEmployeePage() {
       api.get('/shifts'),
       api.get('/schedules'),
     ]).then(([emp, shiftsRes, schedulesRes]) => {
+      const hasPattern = emp.shift_pattern && emp.shift_pattern.length > 0;
+      setUseShiftPattern(hasPattern);
+      if (hasPattern) setShiftPattern(patternFromApi(emp.shift_pattern));
       setForm({
         employee_code: emp.employee_code,
         name: emp.name,
@@ -54,12 +60,24 @@ export default function EditEmployeePage() {
     setErrors(e => ({ ...e, [field]: undefined, _general: undefined }));
   }
 
+  function handlePatternRowChange(dayOfWeek, shiftId) {
+    setShiftPattern(prev => prev.map(r => r.day_of_week === dayOfWeek ? { ...r, shift_id: shiftId } : r));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
     setErrors({});
     try {
-      await api.put(`/employees/${id}`, { ...form, monthly_salary: Number(form.monthly_salary) });
+      const payload = {
+        ...form,
+        monthly_salary:     Number(form.monthly_salary),
+        shift_pattern:      useShiftPattern ? shiftPattern : [],
+        shift_id:           useShiftPattern ? null : form.shift_id,
+        secondary_shift_id: useShiftPattern ? null : form.secondary_shift_id,
+        schedule_id:        useShiftPattern ? null : form.schedule_id,
+      };
+      await api.put(`/employees/${id}`, payload);
       navigate(`/employees/${id}`);
     } catch (err) {
       if (err.data?.errors) {
@@ -136,61 +154,98 @@ export default function EditEmployeePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="emp-shift">{t('employees.shift')}</Label>
-                <select id="emp-shift" value={form.shift_id}
-                  onChange={e => handleChange('shift_id', e.target.value)}
-                  disabled={saving} className={selectClass}>
-                  <option value="">—</option>
-                  {shifts.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.std_hours_per_day} {t('shifts.hoursPerDay')})
-                    </option>
-                  ))}
-                </select>
-                <FieldError error={errors.shift_id} />
-              </div>
-              <div>
-                <Label htmlFor="emp-shift2">{t('employees.secondaryShift')}</Label>
-                <select id="emp-shift2" value={form.secondary_shift_id}
-                  onChange={e => handleChange('secondary_shift_id', e.target.value)}
-                  disabled={saving} className={selectClass}>
-                  <option value="">— {t('common.none')}</option>
-                  {shifts.filter(s => s.id !== form.shift_id).map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.std_hours_per_day} {t('shifts.hoursPerDay')})
-                    </option>
-                  ))}
-                </select>
-                <FieldError error={errors.secondary_shift_id} />
+            {/* Shift pattern toggle */}
+            <div className="space-y-1">
+              <Label>{t('employees.shiftPattern')}</Label>
+              <div className="flex gap-4 mt-1">
+                {[false, true].map(isPattern => (
+                  <label key={String(isPattern)} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="shiftPatternMode"
+                      checked={useShiftPattern === isPattern}
+                      onChange={() => setUseShiftPattern(isPattern)}
+                      disabled={saving}
+                    />
+                    <span className="text-sm">
+                      {isPattern ? t('employees.differentShiftPerDay') : t('employees.sameShiftEveryDay')}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
-            {form.shift_id && form.secondary_shift_id && (() => {
-              const p = shifts.find(s => s.id === form.shift_id);
-              const sec = shifts.find(s => s.id === form.secondary_shift_id);
-              if (!p || !sec) return null;
-              const total = (parseFloat(p.std_hours_per_day) || 0) + (parseFloat(sec.std_hours_per_day) || 0);
-              return (
-                <p className="text-sm text-gray-600">
-                  {t('employees.combinedHours')}: <span className="font-medium">{total} {t('shifts.hoursPerDay')}</span>
-                </p>
-              );
-            })()}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="emp-schedule">{t('employees.schedule')}</Label>
-                <select id="emp-schedule" value={form.schedule_id}
-                  onChange={e => handleChange('schedule_id', e.target.value)}
-                  disabled={saving} className={selectClass}>
-                  <option value="">—</option>
-                  {schedules.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <FieldError error={errors.schedule_id} />
-              </div>
-            </div>
+
+            {useShiftPattern ? (
+              <>
+                <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+                  {t('employees.shiftPatternNote')}
+                </div>
+                <ShiftPatternEditor
+                  shifts={shifts}
+                  pattern={shiftPattern}
+                  onRowChange={handlePatternRowChange}
+                  disabled={saving}
+                />
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="emp-shift">{t('employees.shift')}</Label>
+                    <select id="emp-shift" value={form.shift_id}
+                      onChange={e => handleChange('shift_id', e.target.value)}
+                      disabled={saving} className={selectClass}>
+                      <option value="">—</option>
+                      {shifts.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.std_hours_per_day} {t('shifts.hoursPerDay')})
+                        </option>
+                      ))}
+                    </select>
+                    <FieldError error={errors.shift_id} />
+                  </div>
+                  <div>
+                    <Label htmlFor="emp-shift2">{t('employees.secondaryShift')}</Label>
+                    <select id="emp-shift2" value={form.secondary_shift_id}
+                      onChange={e => handleChange('secondary_shift_id', e.target.value)}
+                      disabled={saving} className={selectClass}>
+                      <option value="">— {t('common.none')}</option>
+                      {shifts.filter(s => s.id !== form.shift_id).map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.std_hours_per_day} {t('shifts.hoursPerDay')})
+                        </option>
+                      ))}
+                    </select>
+                    <FieldError error={errors.secondary_shift_id} />
+                  </div>
+                </div>
+                {form.shift_id && form.secondary_shift_id && (() => {
+                  const p = shifts.find(s => s.id === form.shift_id);
+                  const sec = shifts.find(s => s.id === form.secondary_shift_id);
+                  if (!p || !sec) return null;
+                  const total = (parseFloat(p.std_hours_per_day) || 0) + (parseFloat(sec.std_hours_per_day) || 0);
+                  return (
+                    <p className="text-sm text-gray-600">
+                      {t('employees.combinedHours')}: <span className="font-medium">{total} {t('shifts.hoursPerDay')}</span>
+                    </p>
+                  );
+                })()}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="emp-schedule">{t('employees.schedule')}</Label>
+                    <select id="emp-schedule" value={form.schedule_id}
+                      onChange={e => handleChange('schedule_id', e.target.value)}
+                      disabled={saving} className={selectClass}>
+                      <option value="">—</option>
+                      {schedules.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                    <FieldError error={errors.schedule_id} />
+                  </div>
+                </div>
+              </>
+            )}
 
             <div>
               <Label htmlFor="emp-zk">{t('employees.zkBioId')}</Label>

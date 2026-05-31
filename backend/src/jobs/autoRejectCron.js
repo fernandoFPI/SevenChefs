@@ -2,8 +2,16 @@ const cron = require('node-cron');
 const { query } = require('../config/db');
 const { notifyEmployeeOfAutoReject } = require('../services/notificationService');
 
+async function getSetting(key) {
+  const { rows } = await query('SELECT value FROM system_settings WHERE key = $1', [key]);
+  return rows[0]?.value ?? null;
+}
+
 async function runAutoReject() {
   try {
+    const autoRejectEnabled = await getSetting('auto_reject_enabled');
+    if (autoRejectEnabled !== 'true') return;
+
     const { rows: expired } = await query(
       `UPDATE requests
        SET status = 'AUTO_REJECTED', updated_at = NOW()

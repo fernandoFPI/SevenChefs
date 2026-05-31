@@ -91,7 +91,12 @@ export default function EmployeeListPage() {
                     <tr key={emp.id} className={emp.is_active ? '' : 'opacity-60'}>
                       <td className="px-4 py-3 font-mono text-xs">{emp.employee_code}</td>
                       <td className="px-4 py-3 font-medium">{emp.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{emp.shift_name || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {emp.has_shift_pattern
+                          ? <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700">{t('employees.variableShift')}</span>
+                          : (emp.shift_name || '—')
+                        }
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{emp.schedule_name || '—'}</td>
                       <td className="px-4 py-3 font-mono text-xs">{formatCurrency(emp.monthly_salary, emp.currency || 'IQD')}</td>
                       <td className="px-4 py-3">
