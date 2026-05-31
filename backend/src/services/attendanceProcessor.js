@@ -50,6 +50,22 @@ function shiftTimeToMinutes(timeStr) {
   return h * 60 + m;
 }
 
+// Returns true when a shift's end time is at or before its start time,
+// meaning the shift spans midnight (e.g. 16:00→00:00, 22:00→06:00).
+function isCrossMidnight(shiftStart, shiftEnd) {
+  if (!shiftStart || !shiftEnd) return false;
+  const [sh, sm] = shiftStart.split(':').map(Number);
+  const [eh, em] = shiftEnd.split(':').map(Number);
+  return (eh * 60 + em) <= (sh * 60 + sm);
+}
+
+// Increment a 'YYYY-MM-DD' string by one calendar day.
+function getNextDateStr(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // Standard punch states (Check-In/Out, Break-Out/In).
 const STD_STATES  = new Set(['0', '1', '2', '3']);
 // OT punch states.
@@ -249,8 +265,10 @@ async function processAttendance(options = {}) {
     const leaveMap = new Map(leaves.map(l => [l.date, l.leave_type]));
 
     // Load all punches for this employee in the date range once — including punch_state.
+    // Upper bound is last_date + 2 days to capture cross-midnight checkout punches
+    // (e.g. a 16:00→00:00 shift checked out on the next calendar day + 2h grace).
     const { rows: punches } = await db.query(
-      `SELECT DATE(punch_time AT TIME ZONE 'Asia/Baghdad') AS day, punch_time, punch_state
+      `SELECT id, DATE(punch_time AT TIME ZONE 'Asia/Baghdad') AS day, punch_time, punch_state
        FROM attendance_raw
        WHERE employee_id = $1
          AND punch_time >= $2 AND punch_time < $3
@@ -258,14 +276,17 @@ async function processAttendance(options = {}) {
       [
         emp.id,
         dates[0],
-        new Date(new Date(dates[dates.length - 1]).getTime() + 86400000).toISOString().slice(0, 10),
+        new Date(new Date(dates[dates.length - 1]).getTime() + 2 * 86400000).toISOString().slice(0, 10),
       ]
     );
 
-    // Group punches by day string 'YYYY-MM-DD'.
+    // Group punches by local date string 'YYYY-MM-DD' (for normal shifts).
+    // Also build a flat list with per-punch local date + local minutes for cross-midnight
+    // window matching.
     // pg may return DATE as a local-midnight Date object; use local getters so UTC+3
     // midnight (= previous day in UTC) doesn't shift the date back by one day.
-    const punchMap = new Map();
+    const punchMap     = new Map();
+    const allPunchList = [];
     for (const p of punches) {
       let day;
       if (p.day instanceof Date) {
@@ -274,9 +295,23 @@ async function processAttendance(options = {}) {
       } else {
         day = String(p.day).slice(0, 10);
       }
+      const punchTime = new Date(p.punch_time);
+      const entry     = { time: punchTime, state: String(p.punch_state ?? '') };
       if (!punchMap.has(day)) punchMap.set(day, []);
-      punchMap.get(day).push({ time: new Date(p.punch_time), state: String(p.punch_state ?? '') });
+      punchMap.get(day).push(entry);
+
+      allPunchList.push({
+        id:           String(p.id),
+        time:         punchTime,
+        state:        String(p.punch_state ?? ''),
+        localDate:    day,
+        localMinutes: getLocalMinutes(punchTime),
+      });
     }
+
+    // Tracks punch IDs already assigned to a shift window (cross-midnight only).
+    // Prevents a checkout punch from being counted in two adjacent day windows.
+    const usedPunchIds = new Set();
 
     for (const dateStr of dates) {
       // Skip if manually edited.
@@ -320,7 +355,27 @@ async function processAttendance(options = {}) {
         dayShiftType  = emp.shift_type;
       }
 
-      const dayPunches = punchMap.get(dateStr) || [];
+      // For cross-midnight shifts, collect punches spanning two calendar days using
+      // a shift window [shiftStart-2h … nextDay+shiftEnd+2h] and track used IDs
+      // so a checkout punch isn't counted for both this day and the previous one.
+      let dayPunches;
+      if (isCrossMidnight(dayShiftStart, dayShiftEnd)) {
+        const startMins = shiftTimeToMinutes(dayShiftStart);
+        const endMins   = shiftTimeToMinutes(dayShiftEnd);
+        const bufMins   = 2 * 60; // 2-hour grace buffer
+        const nxtDate   = getNextDateStr(dateStr);
+        const matched   = allPunchList.filter(p => {
+          if (usedPunchIds.has(p.id)) return false;
+          if (p.localDate === dateStr && p.localMinutes >= Math.max(0, startMins - bufMins)) return true;
+          if (p.localDate === nxtDate  && p.localMinutes <= endMins + bufMins)               return true;
+          return false;
+        });
+        matched.forEach(p => usedPunchIds.add(p.id));
+        dayPunches = matched.map(p => ({ time: p.time, state: p.state }));
+      } else {
+        dayPunches = punchMap.get(dateStr) || [];
+      }
+
       const leaveType  = leaveMap.get(dateStr) || null;
 
       let status, hoursWorked, lateHours, otHours, missingPunch;
