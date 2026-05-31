@@ -29,6 +29,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       PORT: 3000
       NODE_ENV: production
+      TZ: Asia/Baghdad
       ZK_HOST: ${ZK_HOST}
       ZK_PORT: ${ZK_PORT}
       ZK_USERNAME: ${ZK_USERNAME}
