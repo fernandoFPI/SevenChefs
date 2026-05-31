@@ -20,5 +20,7 @@ jobs:
             git pull origin main
             docker compose build --no-cache
             docker compose up -d
+            docker compose restart attendance-nginx
+            sleep 5
             docker compose exec -T attendance-backend npm run migrate
             echo "Deployment complete"
