@@ -180,6 +180,31 @@ async function processAttendance(options = {}) {
 
   if (!employees.length) return 0;
 
+  // Load shift patterns for all employees in one query.
+  // Map: employeeId → Map<dayOfWeek, {std_hours_per_day, shift_start, shift_end, shift_type}|null>
+  // null value means off-day for that weekday.
+  const empIds = employees.map(e => e.id);
+  const { rows: patternRows } = await db.query(
+    `SELECT esp.employee_id, esp.day_of_week, esp.shift_id,
+            s.std_hours_per_day, s.shift_start, s.shift_end, s.shift_type
+     FROM employee_shift_patterns esp
+     LEFT JOIN shifts s ON s.id = esp.shift_id
+     WHERE esp.employee_id = ANY($1)`,
+    [empIds]
+  );
+  const patternsByEmployee = new Map();
+  for (const row of patternRows) {
+    if (!patternsByEmployee.has(row.employee_id)) {
+      patternsByEmployee.set(row.employee_id, new Map());
+    }
+    patternsByEmployee.get(row.employee_id).set(
+      Number(row.day_of_week),
+      row.shift_id
+        ? { std_hours_per_day: row.std_hours_per_day, shift_start: row.shift_start, shift_end: row.shift_end, shift_type: row.shift_type }
+        : null
+    );
+  }
+
   // Step 2: Determine date range.
   let from, to;
 
@@ -209,9 +234,11 @@ async function processAttendance(options = {}) {
   for (const emp of employees) {
     const primaryHours   = parseFloat(emp.std_hours_per_day)    || 8;
     const secondaryHours = parseFloat(emp.secondary_std_hours)  || 0;
-    const stdHours       = primaryHours + secondaryHours;
+    const stdHours       = primaryHours + secondaryHours;  // default for non-pattern days
     const workingDays = (emp.working_days || []).map(Number);
     const hasSchedule = workingDays.length > 0;
+    const empPattern  = patternsByEmployee.get(emp.id);
+    const hasPattern  = empPattern !== undefined && empPattern.size > 0;
 
     // Load all leave records for this employee in the date range once.
     const { rows: leaves } = await db.query(
@@ -259,9 +286,40 @@ async function processAttendance(options = {}) {
       );
       if (existing.length && existing[0].is_manually_edited) continue;
 
-      const jsDay      = new Date(dateStr + 'T00:00:00Z').getUTCDay();
-      const ourDay     = jsToOurWeekday(jsDay);
-      const isWorkday  = !hasSchedule || workingDays.includes(ourDay);
+      const jsDay  = new Date(dateStr + 'T00:00:00Z').getUTCDay();
+      const ourDay = jsToOurWeekday(jsDay);
+
+      // Resolve effective shift for this specific date.
+      let dayStdHours, dayShiftStart, dayShiftEnd, dayShiftType, isWorkday;
+      if (hasPattern) {
+        const dayShift = empPattern.get(ourDay); // object | null | undefined
+        if (dayShift === null) {
+          // Pattern says off day for this weekday
+          isWorkday = false;
+          dayStdHours = 0; dayShiftStart = null; dayShiftEnd = null; dayShiftType = null;
+        } else if (dayShift) {
+          // Pattern defines a shift for this weekday
+          isWorkday     = true;
+          dayStdHours   = parseFloat(dayShift.std_hours_per_day) || 8;
+          dayShiftStart = dayShift.shift_start;
+          dayShiftEnd   = dayShift.shift_end;
+          dayShiftType  = dayShift.shift_type;
+        } else {
+          // Weekday not in pattern — fall back to default shift
+          isWorkday     = true;
+          dayStdHours   = stdHours;
+          dayShiftStart = emp.shift_start;
+          dayShiftEnd   = emp.secondary_shift_end || emp.shift_end;
+          dayShiftType  = emp.shift_type;
+        }
+      } else {
+        isWorkday     = !hasSchedule || workingDays.includes(ourDay);
+        dayStdHours   = stdHours;
+        dayShiftStart = emp.shift_start;
+        dayShiftEnd   = emp.secondary_shift_end || emp.shift_end;
+        dayShiftType  = emp.shift_type;
+      }
+
       const dayPunches = punchMap.get(dateStr) || [];
       const leaveType  = leaveMap.get(dateStr) || null;
 
@@ -297,13 +355,13 @@ async function processAttendance(options = {}) {
           lateHours   = 0;
           otHours     = 0;
         } else {
-          const result = emp.secondary_shift_id
-            ? calcDaySplit(dayPunches, stdHours)
-            : calcDay(dayPunches, stdHours);
+          const result = (!hasPattern && emp.secondary_shift_id)
+            ? calcDaySplit(dayPunches, dayStdHours)
+            : calcDay(dayPunches, dayStdHours);
           hoursWorked  = result.hoursWorked;
           lateHours    = result.lateHours;
           if (otMode === 'CALCULATED') {
-            otHours      = round2(Math.max(0, hoursWorked - stdHours));
+            otHours      = round2(Math.max(0, hoursWorked - dayStdHours));
             // OT punch flags are meaningless in CALCULATED mode
             missingPunch = (result.missingPunch === 'OT_IN' || result.missingPunch === 'OT_OUT')
               ? null : result.missingPunch;
@@ -313,30 +371,28 @@ async function processAttendance(options = {}) {
           }
 
           // For DURATION shifts: a single punch is always a missing OUT (employee punched in).
-          if (emp.shift_type === 'DURATION' && result.missingPunch === 'IN') {
+          if (dayShiftType === 'DURATION' && result.missingPunch === 'IN') {
             missingPunch = 'OUT';
           }
 
           // Grace period: may reduce lateHours only.
           // Skipped automatically for DURATION shifts (no shift_start/shift_end).
-          // For double-shift employees, checkout grace uses secondary_shift_end if present.
-          const effectiveShiftEnd = emp.secondary_shift_end || emp.shift_end;
-          if (gracePeriodEnabled && emp.shift_start && effectiveShiftEnd) {
+          if (gracePeriodEnabled && dayShiftStart && dayShiftEnd) {
             const stdPunches = dayPunches.filter(p => STD_STATES.has(p.state));
             if (stdPunches.length >= 2) {
               let adjustedHours = hoursWorked;
 
               const checkInMin  = getLocalMinutes(stdPunches[0].time);
-              const shiftStartM = shiftTimeToMinutes(emp.shift_start);
+              const shiftStartM = shiftTimeToMinutes(dayShiftStart);
               const ciDiff      = checkInMin - shiftStartM; // positive = arrived late
               if (ciDiff > 0 && ciDiff <= gracePeriodMinutes) adjustedHours += ciDiff / 60;
 
               const checkOutMin = getLocalMinutes(stdPunches[stdPunches.length - 1].time);
-              const shiftEndM   = shiftTimeToMinutes(effectiveShiftEnd);
+              const shiftEndM   = shiftTimeToMinutes(dayShiftEnd);
               const coDiff      = shiftEndM - checkOutMin; // positive = left early
               if (coDiff > 0 && coDiff <= gracePeriodMinutes) adjustedHours += coDiff / 60;
 
-              lateHours = round2(Math.max(0, stdHours - adjustedHours));
+              lateHours = round2(Math.max(0, dayStdHours - adjustedHours));
             }
           }
 

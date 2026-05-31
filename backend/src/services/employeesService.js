@@ -14,7 +14,8 @@ async function nextCode() {
 async function list(filters = {}) {
   let sql = `
     SELECT e.*, s.name AS shift_name, sc.name AS schedule_name,
-           s2.name AS secondary_shift_name
+           s2.name AS secondary_shift_name,
+           EXISTS(SELECT 1 FROM employee_shift_patterns WHERE employee_id = e.id) AS has_shift_pattern
     FROM employees e
     LEFT JOIN shifts s  ON e.shift_id = s.id
     LEFT JOIN shifts s2 ON e.secondary_shift_id = s2.id
@@ -45,14 +46,28 @@ async function getById(id) {
      WHERE e.id = $1`,
     [id]
   );
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  const employee = rows[0];
+
+  const { rows: patternRows } = await db.query(
+    `SELECT esp.day_of_week, esp.shift_id, s.name AS shift_name, s.std_hours_per_day AS std_hours
+     FROM employee_shift_patterns esp
+     LEFT JOIN shifts s ON s.id = esp.shift_id
+     WHERE esp.employee_id = $1
+     ORDER BY esp.day_of_week`,
+    [id]
+  );
+  employee.shift_pattern = patternRows;
+  return employee;
 }
 
 async function create(data) {
   const {
     employee_code, name, monthly_salary, shift_id, schedule_id,
     secondary_shift_id, zk_employee_id, username, role, currency = 'IQD',
+    shift_pattern,
   } = data;
+  const hasPattern = Array.isArray(shift_pattern) && shift_pattern.length > 0;
 
   const client = await db.connect();
   try {
@@ -79,9 +94,26 @@ async function create(data) {
     const { rows: empRows } = await client.query(
       `INSERT INTO employees (employee_code, name, monthly_salary, shift_id, secondary_shift_id, schedule_id, zk_employee_id, currency)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [employee_code, name, monthly_salary, shift_id || null, secondary_shift_id || null, schedule_id || null, zk_employee_id || null, currency]
+      [
+        employee_code, name, monthly_salary,
+        hasPattern ? null : (shift_id || null),
+        hasPattern ? null : (secondary_shift_id || null),
+        hasPattern ? null : (schedule_id || null),
+        zk_employee_id || null, currency,
+      ]
     );
     const employee = empRows[0];
+
+    if (hasPattern) {
+      for (const row of shift_pattern) {
+        await client.query(
+          `INSERT INTO employee_shift_patterns (employee_id, day_of_week, shift_id)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (employee_id, day_of_week) DO UPDATE SET shift_id = EXCLUDED.shift_id, updated_at = NOW()`,
+          [employee.id, row.day_of_week, row.shift_id || null]
+        );
+      }
+    }
 
     const passwordHash = await bcrypt.hash(employee_code, 12);
     await client.query(
@@ -103,8 +135,9 @@ async function create(data) {
 async function update(id, data) {
   const {
     employee_code, name, monthly_salary, shift_id, secondary_shift_id, schedule_id,
-    zk_employee_id, username, role, currency,
+    zk_employee_id, username, role, currency, shift_pattern,
   } = data;
+  const hasPattern = Array.isArray(shift_pattern) && shift_pattern.length > 0;
 
   const client = await db.connect();
   try {
@@ -134,8 +167,26 @@ async function update(id, data) {
            shift_id = $4, secondary_shift_id = $5, schedule_id = $6,
            zk_employee_id = $7, currency = $8, updated_at = NOW()
        WHERE id = $9 RETURNING *`,
-      [employee_code, name, monthly_salary, shift_id || null, secondary_shift_id || null, schedule_id || null, zk_employee_id || null, currency || 'IQD', id]
+      [
+        employee_code, name, monthly_salary,
+        hasPattern ? null : (shift_id || null),
+        hasPattern ? null : (secondary_shift_id || null),
+        hasPattern ? null : (schedule_id || null),
+        zk_employee_id || null, currency || 'IQD', id,
+      ]
     );
+
+    // Sync shift pattern: delete all existing, then insert new rows
+    await client.query('DELETE FROM employee_shift_patterns WHERE employee_id = $1', [id]);
+    if (hasPattern) {
+      for (const row of shift_pattern) {
+        await client.query(
+          `INSERT INTO employee_shift_patterns (employee_id, day_of_week, shift_id)
+           VALUES ($1, $2, $3)`,
+          [id, row.day_of_week, row.shift_id || null]
+        );
+      }
+    }
 
     const { rows: uRows } = await client.query(
       'SELECT * FROM users WHERE employee_id = $1', [id]

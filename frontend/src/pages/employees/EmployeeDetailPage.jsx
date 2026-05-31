@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DAYS_OF_WEEK } from '@/components/ShiftPatternEditor';
 
 function Field({ label, value }) {
   return (
@@ -37,6 +38,11 @@ export default function EmployeeDetailPage() {
     .map(d => t(`schedules.days.${d}`))
     .join(', ');
 
+  const hasPattern = employee.shift_pattern && employee.shift_pattern.length > 0;
+  const patternMap = hasPattern
+    ? new Map(employee.shift_pattern.map(p => [p.day_of_week, p]))
+    : null;
+
   return (
     <div className="max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
@@ -63,16 +69,55 @@ export default function EmployeeDetailPage() {
             label={t('common.status')}
             value={employee.is_active ? t('common.active') : t('common.inactive')}
           />
-          <Field
-            label={t('employees.shift')}
-            value={employee.shift_name
-              ? `${employee.shift_name} (${employee.shift_hours} ${t('shifts.hoursPerDay')})`
-              : '—'}
-          />
-          <Field
-            label={t('employees.schedule')}
-            value={employee.schedule_name ? `${employee.schedule_name} — ${workingDays}` : '—'}
-          />
+          {hasPattern ? (
+            <div className="col-span-2 space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('employees.shiftPattern')}</p>
+              <div className="rounded-md border border-gray-200 overflow-hidden mt-1">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.day')}</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('employees.shift')}</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('shifts.totalHours')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {DAYS_OF_WEEK.map(day => {
+                      const entry = patternMap.get(day.value);
+                      const isOff = !entry || !entry.shift_id;
+                      return (
+                        <tr key={day.value} className={isOff ? 'bg-gray-50' : ''}>
+                          <td className="px-3 py-2 font-medium text-gray-700">{t(`days.${day.key}`)}</td>
+                          <td className="px-3 py-2 text-gray-600">
+                            {isOff
+                              ? <span className="text-xs text-gray-400">{t('employees.offDay')}</span>
+                              : entry.shift_name
+                            }
+                          </td>
+                          <td className="px-3 py-2 text-gray-500">
+                            {isOff ? '—' : `${entry.std_hours} ${t('shifts.hoursPerDay')}`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Field
+                label={t('employees.shift')}
+                value={employee.shift_name
+                  ? `${employee.shift_name} (${employee.shift_hours} ${t('shifts.hoursPerDay')})`
+                  : '—'}
+              />
+              <Field
+                label={t('employees.schedule')}
+                value={employee.schedule_name ? `${employee.schedule_name} — ${workingDays}` : '—'}
+              />
+            </>
+          )}
           <Field
             label={t('employees.zkBioId')}
             value={employee.zk_employee_id || t('employees.notSet')}

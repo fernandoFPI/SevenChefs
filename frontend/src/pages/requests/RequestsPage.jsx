@@ -96,11 +96,13 @@ function ActionModal({ request, role, onClose, onDone }) {
 export default function RequestsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [requests, setRequests]     = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [statusFilter, setStatus]   = useState('');
-  const [typeFilter, setType]       = useState('');
-  const [selected, setSelected]     = useState(null);
+  const [requests, setRequests]         = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [statusFilter, setStatus]       = useState('');
+  const [typeFilter, setType]           = useState('');
+  const [selected, setSelected]         = useState(null);
+  const [autoRejectEnabled, setAutoRejectEnabled] = useState(true);
+  const [bannerDismissed, setBannerDismissed]     = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,8 +110,14 @@ export default function RequestsPage() {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       if (typeFilter)   params.set('type',   typeFilter);
-      const data = await api.get(`/requests?${params}`);
-      setRequests(data);
+      const [data, settingsData] = await Promise.allSettled([
+        api.get(`/requests?${params}`),
+        api.get('/settings'),
+      ]);
+      if (data.status === 'fulfilled')     setRequests(data.value);
+      if (settingsData.status === 'fulfilled') {
+        setAutoRejectEnabled(settingsData.value.auto_reject_enabled !== 'false');
+      }
     } finally {
       setLoading(false);
     }
@@ -134,6 +142,12 @@ export default function RequestsPage() {
 
   return (
     <div>
+      {!autoRejectEnabled && !bannerDismissed && (
+        <div className="flex items-start justify-between gap-3 mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <span>{t('requests.autoRejectDisabledBanner')}</span>
+          <button onClick={() => setBannerDismissed(true)} className="flex-shrink-0 text-blue-500 hover:text-blue-700 font-medium leading-none">✕</button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">{t('requests.title')}</h1>
         <div className="flex gap-2">

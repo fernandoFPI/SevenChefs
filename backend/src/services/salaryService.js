@@ -63,6 +63,15 @@ async function calculateSalary(employeeId, periodMonth) {
   if (!empRows.length) return null;
   const emp = empRows[0];
 
+  // Load shift pattern to determine effective std_hours (average across working days).
+  const { rows: patternRows } = await db.query(
+    `SELECT s.std_hours_per_day
+     FROM employee_shift_patterns esp
+     JOIN shifts s ON s.id = esp.shift_id
+     WHERE esp.employee_id = $1 AND esp.shift_id IS NOT NULL`,
+    [employeeId]
+  );
+
   // Check if a non-DRAFT record exists — skip if so.
   const { rows: existing } = await db.query(
     `SELECT id, status FROM salary_records WHERE employee_id = $1 AND period_month = $2`,
@@ -84,7 +93,9 @@ async function calculateSalary(employeeId, periodMonth) {
   const otMult       = cfg.ot_multiplier           || 2.0;
   const latePenUnapp = cfg.late_penalty_unapproved  || 1.5;
   const latePenApp   = cfg.late_penalty_approved    || 1.0;
-  const stdHours     = (parseFloat(emp.std_hours_per_day) || 8) + (parseFloat(emp.secondary_std_hours) || 0);
+  const stdHours = patternRows.length > 0
+    ? round2(patternRows.reduce((s, r) => s + (parseFloat(r.std_hours_per_day) || 0), 0) / patternRows.length)
+    : (parseFloat(emp.std_hours_per_day) || 8) + (parseFloat(emp.secondary_std_hours) || 0);
 
   const dailyRate  = round4(baseSalary / stdDays);
   const hourlyRate = round4(dailyRate  / stdHours);
