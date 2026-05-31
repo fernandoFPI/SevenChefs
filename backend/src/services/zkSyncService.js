@@ -14,13 +14,11 @@ async function getAllSettings() {
   return Object.fromEntries(rows.map(r => [r.key, r.value]));
 }
 
-// punch_time from ZKBio is local server time stored as-is.
-// No timezone conversion applied — displayed time matches ZKBio.
+// ZKBio returns local time strings with no timezone (e.g. "2026-05-31 10:51:23").
+// These are UTC+3 (Asia/Baghdad). Appending +03:00 tells PostgreSQL the correct
+// moment so it stores the right UTC value internally.
 function toUtcTimestamp(zkTimeStr) {
-  // ZKBio returns times in local server time (e.g. "2026-05-11 10:05:10")
-  // Store as-is without timezone conversion to preserve the displayed time.
-  // Replace space with T for ISO format but do NOT append Z.
-  return zkTimeStr ? zkTimeStr.replace(' ', 'T') : null;
+  return zkTimeStr ? zkTimeStr.replace(' ', 'T') + '+03:00' : null;
 }
 
 // Format a Date as "YYYY-MM-DD HH:mm:ss" for ZKBio query params.
