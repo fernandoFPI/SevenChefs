@@ -28,6 +28,9 @@ CHECK (type IN ('OT_REQUEST', 'OFF_REQUEST', 'TIME_OFF_REQUEST'));
 ALTER TABLE requests
 ADD COLUMN IF NOT EXISTS auto_reject_at TIMESTAMPTZ;
 
+-- attendance_date must be nullable for TIME_OFF_REQUEST rows (which use date_from/date_to instead)
+ALTER TABLE requests ALTER COLUMN attendance_date DROP NOT NULL;
+
 -- Add secondary_shift_id to employees if missing
 ALTER TABLE employees
 ADD COLUMN IF NOT EXISTS secondary_shift_id UUID REFERENCES shifts(id);
