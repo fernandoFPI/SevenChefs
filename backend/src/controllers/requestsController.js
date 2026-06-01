@@ -23,7 +23,8 @@ async function countWorkingDays(employeeId, dateFrom, dateTo) {
   const cur = new Date(dateFrom + 'T00:00:00Z');
   const end = new Date(dateTo   + 'T00:00:00Z');
   while (cur <= end) {
-    const dow = cur.getUTCDay(); // 0=Sun, 6=Sat
+    // Convert JS UTC day (0=Sun) to our 0=Mon convention: (day+6)%7
+    const dow = (cur.getUTCDay() + 6) % 7;
     if (!workingDays || workingDays.includes(dow)) count++;
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
@@ -33,7 +34,7 @@ async function countWorkingDays(employeeId, dateFrom, dateTo) {
 // GET /api/requests — role-scoped list
 async function getRequests(req, res) {
   try {
-    const { role, id: userId } = req.user;
+    const { role, userId } = req.user;
     const { status, type } = req.query;
 
     let baseQuery = `
@@ -87,7 +88,7 @@ async function getRequests(req, res) {
 // POST /api/requests — EMPLOYEE creates a request
 async function createRequest(req, res) {
   try {
-    const { id: userId } = req.user;
+    const { userId } = req.user;
     const { type, attendance_date, hours_requested, reason, request_subtype, time_from, time_to, partial_hours } = req.body;
 
     const { date_from, date_to } = req.body;
@@ -212,7 +213,7 @@ async function createRequest(req, res) {
 // PUT /api/requests/:id/manager-action — MANAGER forwards or rejects
 async function managerAction(req, res) {
   try {
-    const { id: userId } = req.user;
+    const { userId } = req.user;
     const { id } = req.params;
     const { action, note } = req.body;
 
@@ -221,7 +222,12 @@ async function managerAction(req, res) {
     }
 
     const { rows } = await query(
-      `SELECT r.*, e.name AS employee_name, u.id AS employee_user_id
+      `SELECT r.*,
+              r.date_from::text         AS date_from,
+              r.date_to::text           AS date_to,
+              r.attendance_date::text   AS attendance_date,
+              e.name AS employee_name,
+              u.id   AS employee_user_id
        FROM requests r
        JOIN employees e ON e.id = r.employee_id
        LEFT JOIN users u ON u.employee_id = e.id
@@ -261,7 +267,7 @@ async function managerAction(req, res) {
 // PUT /api/requests/:id/admin-action — ADMIN approves or rejects
 async function adminAction(req, res) {
   try {
-    const { id: userId } = req.user;
+    const { userId } = req.user;
     const { id } = req.params;
     const { action, note } = req.body;
 
@@ -270,7 +276,12 @@ async function adminAction(req, res) {
     }
 
     const { rows } = await query(
-      `SELECT r.*, e.name AS employee_name, u.id AS employee_user_id
+      `SELECT r.*,
+              r.date_from::text         AS date_from,
+              r.date_to::text           AS date_to,
+              r.attendance_date::text   AS attendance_date,
+              e.name AS employee_name,
+              u.id   AS employee_user_id
        FROM requests r
        JOIN employees e ON e.id = r.employee_id
        LEFT JOIN users u ON u.employee_id = e.id
@@ -293,6 +304,25 @@ async function adminAction(req, res) {
        RETURNING *`,
       [newStatus, userId, action, note || null, id]
     );
+
+    // OT_REQUEST approval: mark ot_approved on the attendance_daily row
+    if (action === 'APPROVE' && request.type === 'OT_REQUEST') {
+      await query(
+        `UPDATE attendance_daily SET ot_approved = true, updated_at = NOW()
+         WHERE employee_id = $1 AND date = $2`,
+        [request.employee_id, request.attendance_date]
+      );
+    }
+
+    // OFF_REQUEST full-day approval: create leave record
+    if (action === 'APPROVE' && request.type === 'OFF_REQUEST' && request.request_subtype !== 'PARTIAL_DAY') {
+      await query(
+        `INSERT INTO leave_records (employee_id, date, leave_type, created_by)
+         VALUES ($1, $2, 'PAID', $3)
+         ON CONFLICT (employee_id, date) DO UPDATE SET leave_type = 'PAID'`,
+        [request.employee_id, request.attendance_date, userId]
+      );
+    }
 
     // Partial-day off approval: update attendance_daily for that day
     if (action === 'APPROVE' && request.type === 'OFF_REQUEST' && request.request_subtype === 'PARTIAL_DAY' && request.partial_hours) {
@@ -319,7 +349,8 @@ async function adminAction(req, res) {
       const workingDays = schedRows[0]?.working_days;
 
       while (cur <= end) {
-        const dow    = cur.getUTCDay();
+        // Convert JS UTC day (0=Sun) to our 0=Mon convention: (day+6)%7
+        const dow     = (cur.getUTCDay() + 6) % 7;
         const dateStr = cur.toISOString().slice(0, 10);
 
         if (!workingDays || workingDays.includes(dow)) {
