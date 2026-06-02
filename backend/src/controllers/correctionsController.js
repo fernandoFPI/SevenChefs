@@ -89,14 +89,18 @@ async function saveCorrection(req, res) {
 
     const { employee_id, date } = daily[0];
 
-    // Load employee shift for std_hours
-    const { rows: empRows } = await db.query(
-      `SELECT s.std_hours_per_day FROM employees e
-       LEFT JOIN shifts s ON s.id = e.shift_id
-       WHERE e.id = $1`,
-      [employee_id]
-    );
-    const stdHours = parseFloat(empRows[0]?.std_hours_per_day) || 8;
+    // Load employee shift for std_hours and OT mode setting in parallel
+    const [empResult, otModeResult] = await Promise.all([
+      db.query(
+        `SELECT s.std_hours_per_day FROM employees e
+         LEFT JOIN shifts s ON s.id = e.shift_id
+         WHERE e.id = $1`,
+        [employee_id]
+      ),
+      db.query(`SELECT value FROM system_settings WHERE key = 'ot_calculation_mode'`),
+    ]);
+    const stdHours = parseFloat(empResult.rows[0]?.std_hours_per_day) || 8;
+    const otMode   = otModeResult.rows[0]?.value || 'OT_PUNCH';
 
     // Load raw punches for that day (ascending)
     const { rows: rawPunches } = await db.query(
@@ -126,8 +130,14 @@ async function saveCorrection(req, res) {
     const effOtOut    = corrected_ot_out    || original_ot_out;
 
     const hours_worked = (effCheckIn && effCheckOut) ? timeDiffHours(effCheckIn, effCheckOut) : 0;
-    const ot_hours     = (effOtIn    && effOtOut)    ? timeDiffHours(effOtIn, effOtOut)       : 0;
-    const late_hours   = round2(Math.max(0, stdHours - hours_worked));
+    let ot_hours, late_hours;
+    if (otMode === 'CALCULATED') {
+      ot_hours   = round2(Math.max(0, hours_worked - stdHours));
+      late_hours = round2(Math.max(0, stdHours - hours_worked));
+    } else {
+      ot_hours   = (effOtIn && effOtOut) ? timeDiffHours(effOtIn, effOtOut) : 0;
+      late_hours = round2(Math.max(0, stdHours - hours_worked));
+    }
 
     // Determine missing_punch after correction
     let missing_punch = null;
