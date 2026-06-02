@@ -48,9 +48,13 @@ async function getRaw(req, res) {
                 e.name AS employee_name,
                 ar.punch_time, ar.punch_state, ar.verify_type,
                 ar.terminal_sn, ar.terminal_alias, ar.upload_time,
-                ar.is_off_day_punch, ar.synced_at
+                ar.is_off_day_punch, ar.synced_at,
+                ar.is_ignored, ar.overridden_state, ar.override_reason,
+                ar.overridden_at,
+                u.username AS overridden_by_name
          FROM attendance_raw ar
          LEFT JOIN employees e ON e.id = ar.employee_id
+         LEFT JOIN users     u ON u.id = ar.overridden_by
          ${where}
          ORDER BY ar.punch_time DESC
          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -163,4 +167,66 @@ async function historicalSync(req, res) {
   }
 }
 
-module.exports = { getRaw, syncNow, getSyncStatus, getSyncLogs, historicalSync };
+// ── PATCH /api/attendance/raw/:id/ignore ─────────────────────────────────────
+async function ignorePunch(req, res) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const { rows } = await db.query(
+      `UPDATE attendance_raw
+       SET is_ignored = true, override_reason = $1,
+           overridden_by = $2, overridden_at = NOW()
+       WHERE id = $3 RETURNING id`,
+      [reason || null, req.user.id, id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Punch not found' });
+    res.json({ message: 'Punch ignored' });
+  } catch (err) {
+    console.error('[attendance] ignorePunch:', err.message);
+    res.status(500).json({ message: 'Failed to ignore punch' });
+  }
+}
+
+// ── PATCH /api/attendance/raw/:id/restore ────────────────────────────────────
+async function restorePunch(req, res) {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query(
+      `UPDATE attendance_raw
+       SET is_ignored = false, overridden_state = NULL,
+           override_reason = NULL, overridden_by = NULL, overridden_at = NULL
+       WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Punch not found' });
+    res.json({ message: 'Punch restored' });
+  } catch (err) {
+    console.error('[attendance] restorePunch:', err.message);
+    res.status(500).json({ message: 'Failed to restore punch' });
+  }
+}
+
+// ── PATCH /api/attendance/raw/:id/override-state ─────────────────────────────
+async function overrideState(req, res) {
+  try {
+    const { id } = req.params;
+    const { state, reason } = req.body;
+    const VALID_STATES = ['0', '1', '2', '3', '4', '5'];
+    if (!state || !VALID_STATES.includes(String(state)))
+      return res.status(400).json({ message: 'state must be one of 0,1,2,3,4,5' });
+    const { rows } = await db.query(
+      `UPDATE attendance_raw
+       SET overridden_state = $1, override_reason = $2,
+           overridden_by = $3, overridden_at = NOW()
+       WHERE id = $4 RETURNING id`,
+      [String(state), reason || null, req.user.id, id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Punch not found' });
+    res.json({ message: 'Punch state overridden' });
+  } catch (err) {
+    console.error('[attendance] overrideState:', err.message);
+    res.status(500).json({ message: 'Failed to override punch state' });
+  }
+}
+
+module.exports = { getRaw, syncNow, getSyncStatus, getSyncLogs, historicalSync, ignorePunch, restorePunch, overrideState };
