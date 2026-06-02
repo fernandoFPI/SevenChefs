@@ -33,7 +33,10 @@
       "Bash(cmd /c \"taskkill /PID 7644 /F\")",
       "Bash(netstat -ano)",
       "Bash(awk '{print $NF}')",
-      "Bash(cmd /c \"taskkill /F /IM node.exe\")"
+      "Bash(cmd /c \"taskkill /F /IM node.exe\")",
+      "Bash(Sort-Object -Property Name -Descending)",
+      "Bash(Select-Object -First 5)",
+      "Bash(PGPASSWORD=Xerox@2026 psql -h localhost -p 5432 -U fernando -d attendance_db -c ' *)"
     ]
   }
 }

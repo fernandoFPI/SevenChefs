@@ -304,6 +304,22 @@
     "otOut": "OT-Out",
     "unknown": "Unknown"
   },
+  "raw": {
+    "ignorePunch": "Ignore Punch",
+    "restorePunch": "Restore Punch",
+    "changeToCheckIn": "Change to Check-In",
+    "changeToCheckOut": "Change to Check-Out",
+    "changeToOTIn": "Change to OT Check-In",
+    "changeToOTOut": "Change to OT Check-Out",
+    "confirmIgnore": "Ignore this punch? It will be excluded from attendance calculations. You can restore it anytime.",
+    "confirmChangeState": "Change punch state to {{state}}?",
+    "ignoreReason": "Reason (optional)",
+    "ignoredBadge": "Ignored",
+    "overriddenBadge": "Overridden",
+    "ignoredBy": "Ignored by {{name}} on {{date}}",
+    "overriddenBy": "Changed by {{name}} on {{date}}",
+    "originalState": "Original"
+  },
   "requests": {
     "title": "Requests",
     "myRequests": "My Requests",

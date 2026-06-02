@@ -9,7 +9,10 @@ const correctionsCtrl = require('../controllers/correctionsController');
 const VIEW_ROLES  = ['ADMIN', 'ACCOUNTANT', 'MANAGER'];
 const SYNC_ROLES  = ['ADMIN', 'ACCOUNTANT'];
 
-router.get('/raw',         requireAuth, requireRole(...VIEW_ROLES), ctrl.getRaw);
+router.get('/raw',                          requireAuth, requireRole(...VIEW_ROLES), ctrl.getRaw);
+router.patch('/raw/:id/ignore',             requireAuth, requireRole(...VIEW_ROLES), ctrl.ignorePunch);
+router.patch('/raw/:id/restore',            requireAuth, requireRole(...VIEW_ROLES), ctrl.restorePunch);
+router.patch('/raw/:id/override-state',     requireAuth, requireRole(...VIEW_ROLES), ctrl.overrideState);
 router.post('/sync',       requireAuth, requireRole(...SYNC_ROLES), ctrl.syncNow);
 router.get('/sync/status', requireAuth, requireRole(...VIEW_ROLES), ctrl.getSyncStatus);
 router.get('/sync/logs',      requireAuth, requireRole(...VIEW_ROLES), ctrl.getSyncLogs);

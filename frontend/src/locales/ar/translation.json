@@ -304,6 +304,22 @@
     "otOut": "نهاية العمل الإضافي",
     "unknown": "غير معروف"
   },
+  "raw": {
+    "ignorePunch": "تجاهل البصمة",
+    "restorePunch": "استعادة البصمة",
+    "changeToCheckIn": "تغيير إلى تسجيل دخول",
+    "changeToCheckOut": "تغيير إلى تسجيل خروج",
+    "changeToOTIn": "تغيير إلى دخول عمل إضافي",
+    "changeToOTOut": "تغيير إلى خروج عمل إضافي",
+    "confirmIgnore": "هل تريد تجاهل هذا السجل؟ لن يتم احتسابه في حسابات الحضور. يمكنك استعادته في أي وقت.",
+    "confirmChangeState": "هل تريد تغيير حالة البصمة إلى {{state}}؟",
+    "ignoreReason": "السبب (اختياري)",
+    "ignoredBadge": "مُتجاهل",
+    "overriddenBadge": "مُعدَّل",
+    "ignoredBy": "تم التجاهل بواسطة {{name}} في {{date}}",
+    "overriddenBy": "تم التعديل بواسطة {{name}} في {{date}}",
+    "originalState": "الأصلي"
+  },
   "requests": {
     "title": "الطلبات",
     "myRequests": "طلباتي",

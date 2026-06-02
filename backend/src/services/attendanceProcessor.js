@@ -322,14 +322,17 @@ async function processAttendance(options = {}) {
     );
     const leaveMap = new Map(leaves.map(l => [l.date, l.leave_type]));
 
-    // Load all punches for this employee in the date range once — including punch_state.
-    // Upper bound is last_date + 2 days to capture cross-midnight checkout punches
-    // (e.g. a 16:00→00:00 shift checked out on the next calendar day + 2h grace).
+    // Load all punches for this employee in the date range once.
+    // Ignored punches are excluded; overridden_state takes precedence over punch_state.
     const { rows: punches } = await db.query(
-      `SELECT id, DATE(punch_time AT TIME ZONE 'Asia/Baghdad') AS day, punch_time, punch_state
+      `SELECT id,
+              DATE(punch_time AT TIME ZONE 'Asia/Baghdad') AS day,
+              punch_time,
+              COALESCE(overridden_state, punch_state) AS punch_state
        FROM attendance_raw
        WHERE employee_id = $1
          AND punch_time >= $2 AND punch_time < $3
+         AND is_ignored = false
        ORDER BY punch_time ASC`,
       [
         emp.id,
