@@ -10,5 +10,6 @@ const ADMIN_ACCOUNTANT = ['ADMIN', 'ACCOUNTANT'];
 router.get('/balance',                            requireAuth, ctrl.getBalance);
 router.get('/balances',                           requireAuth, requireRole(...ADMIN_ACCOUNTANT), ctrl.getAllBalances);
 router.put('/balances/:employeeId/adjust',        requireAuth, requireRole('ADMIN'), ctrl.adjustBalance);
+router.post('/grant',                             requireAuth, requireRole(...MGMT), ctrl.grantTimeOff);
 
 module.exports = router;

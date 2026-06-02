@@ -98,6 +98,20 @@ async function fetchAllTransactions(host, port, token, syncFrom, syncTo) {
   return records;
 }
 
+// Returns true if a punch with the same employee, same state, and within 30 seconds already exists.
+async function isNearDuplicate(empId, punchState, punchTimeIso) {
+  if (!empId) return false;
+  const { rows } = await db.query(
+    `SELECT id FROM attendance_raw
+     WHERE employee_id = $1
+       AND punch_state  = $2
+       AND ABS(EXTRACT(EPOCH FROM (punch_time - $3::timestamptz))) <= 30
+     LIMIT 1`,
+    [empId, punchState, punchTimeIso]
+  );
+  return rows.length > 0;
+}
+
 // ── Batch employee lookup (no N+1) ───────────────────────────────────────────
 
 async function loadEmployeeMap() {
@@ -176,7 +190,15 @@ async function runSync(trigger = 'CRON') {
         isOffDay = !emp.workingDays.map(Number).includes(ourWeekday);
       }
 
-      const uploadTime = tx.upload_time ? toUtcTimestamp(tx.upload_time) : null;
+      const uploadTime  = tx.upload_time ? toUtcTimestamp(tx.upload_time) : null;
+      const punchTimeIso = toUtcTimestamp(tx.punch_time);
+      const punchState  = tx.punch_state != null ? String(tx.punch_state) : null;
+
+      // Skip near-duplicate punches (same employee, same state, within 30 seconds).
+      if (await isNearDuplicate(empId, punchState, punchTimeIso)) {
+        recordsSkipped++;
+        continue;
+      }
 
       const result = await db.query(
         `INSERT INTO attendance_raw
@@ -188,8 +210,8 @@ async function runSync(trigger = 'CRON') {
           tx.id,
           tx.emp_code,
           empId,
-          toUtcTimestamp(tx.punch_time),
-          tx.punch_state != null ? String(tx.punch_state) : null,
+          punchTimeIso,
+          punchState,
           tx.verify_type   != null ? Number(tx.verify_type) : null,
           tx.terminal_sn   || null,
           tx.terminal_alias || null,
@@ -297,6 +319,14 @@ async function _doHistoricalSync(logId, fromDate) {
         const ourWeekday = jsToOurWeekday(punchDate.getUTCDay());
         isOffDay = !emp.workingDays.map(Number).includes(ourWeekday);
       }
+      const punchTimeIso2 = toUtcTimestamp(tx.punch_time);
+      const punchState2   = tx.punch_state != null ? String(tx.punch_state) : null;
+
+      if (await isNearDuplicate(empId, punchState2, punchTimeIso2)) {
+        recordsSkipped++;
+        continue;
+      }
+
       const result = await db.query(
         `INSERT INTO attendance_raw
            (zk_transaction_id, zk_emp_code, employee_id, punch_time, punch_state,
@@ -304,8 +334,8 @@ async function _doHistoricalSync(logId, fromDate) {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (zk_transaction_id) DO NOTHING`,
         [
-          tx.id, tx.emp_code, empId, toUtcTimestamp(tx.punch_time),
-          tx.punch_state != null ? String(tx.punch_state) : null,
+          tx.id, tx.emp_code, empId, punchTimeIso2,
+          punchState2,
           tx.verify_type  != null ? Number(tx.verify_type) : null,
           tx.terminal_sn  || null, tx.terminal_alias || null,
           tx.upload_time ? toUtcTimestamp(tx.upload_time) : null,
