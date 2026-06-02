@@ -357,11 +357,12 @@ async function processAttendance(options = {}) {
       const punchState = String(p.punch_state ?? '');
 
       if (punchState === '1') {
-        const localHour = parseInt(new Intl.DateTimeFormat('en-US', {
+        let localHour = parseInt(new Intl.DateTimeFormat('en-US', {
           timeZone: 'Asia/Baghdad',
           hour:     'numeric',
           hour12:   false,
         }).format(punchTime), 10);
+        if (localHour === 24) localHour = 0; // some Node versions return 24 for midnight
         if (localHour < CROSS_MIDNIGHT_CUTOFF) {
           day = getPrevDateStr(day);
         }
