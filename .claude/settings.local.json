@@ -21,7 +21,19 @@
       "Bash(PGPASSWORD=Xerox@2026 '/c/Program Files/PostgreSQL/18/bin/psql.exe' -U fernando -d attendance_db -h localhost -c ' *)",
       "Bash(dir /s /b \"c:\\\\Users\\\\PC\\\\OneDrive - Farage Printing Industries\\\\Desktop\\\\SC\\\\frontend\\\\src\\\\lib\")",
       "Bash(python -c ' *)",
-      "Bash(findstr Dockerfile)"
+      "Bash(findstr Dockerfile)",
+      "Bash(node tests/requests.test.js)",
+      "Bash(node server.js)",
+      "Bash(Start-Sleep -Seconds 3)",
+      "Bash(Invoke-WebRequest -Uri \"http://localhost:3000/api/auth/me\" -UseBasicParsing)",
+      "Bash(Select-Object -First 3)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/auth/me)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(kill -9 7644)",
+      "Bash(cmd /c \"taskkill /PID 7644 /F\")",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $NF}')",
+      "Bash(cmd /c \"taskkill /F /IM node.exe\")"
     ]
   }
 }

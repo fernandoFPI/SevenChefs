@@ -66,6 +66,23 @@ function getNextDateStr(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
+// Returns true if dateStr is the 5th occurrence of its weekday in that month.
+// e.g. the 5th Saturday of May → mandatory working day even if normally off.
+function isFifthWeekdayOccurrence(dateStr) {
+  const date    = new Date(dateStr + 'T00:00:00Z');
+  const dayOfWeek = date.getUTCDay();
+  const year    = date.getUTCFullYear();
+  const month   = date.getUTCMonth();
+  let count = 0;
+  const d = new Date(Date.UTC(year, month, 1));
+  while (d.getUTCMonth() === month) {
+    if (d.getUTCDay() === dayOfWeek) count++;
+    if (d.toISOString().slice(0, 10) === dateStr) break;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return count === 5;
+}
+
 // Standard punch states (Check-In/Out, Break-Out/In).
 const STD_STATES  = new Set(['0', '1', '2', '3']);
 // OT punch states.
@@ -387,6 +404,21 @@ async function processAttendance(options = {}) {
         dayShiftStart = emp.shift_start;
         dayShiftEnd   = emp.secondary_shift_end || emp.shift_end;
         dayShiftType  = emp.shift_type;
+      }
+
+      // ── 5th-weekday-occurrence override ──────────────────────────────────────
+      // When a month has 5 occurrences of an employee's scheduled off day, the
+      // 5th occurrence is a mandatory working day.  No punches → ABSENT.
+      if (!isWorkday && isFifthWeekdayOccurrence(dateStr)) {
+        isWorkday = true;
+        // For pattern employees whose pattern has no shift on this weekday,
+        // the shift values are currently null/0 — fall back to primary shift.
+        if (!dayStdHours) {
+          dayStdHours   = primaryHours + secondaryHours || 8;
+          dayShiftStart = emp.shift_start;
+          dayShiftEnd   = emp.secondary_shift_end || emp.shift_end;
+          dayShiftType  = emp.shift_type;
+        }
       }
 
       // ── Shift swap overrides ──────────────────────────────────────────────────

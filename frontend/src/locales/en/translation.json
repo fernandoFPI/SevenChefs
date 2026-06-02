@@ -269,7 +269,15 @@
     "totalEmployees": "Total Employees",
     "fullBalance": "Full Balance",
     "partiallyUsed": "Partially Used",
-    "fullyUsed": "Fully Used"
+    "fullyUsed": "Fully Used",
+    "grantTimeOff": "Grant Time Off",
+    "grantFor": "Employee",
+    "deductFromBalance": "Deduct from Balance",
+    "bonusLeave": "Bonus / Special Leave (no balance deduction)",
+    "currentBalance": "Current balance",
+    "exceedsBalance": "Exceeds remaining balance by {{n}} day(s). You can still proceed.",
+    "grantSuccess": "Time off granted for {{employee}}",
+    "grantedBy": "Granted by {{name}}"
   },
   "request": {
     "timeOffRequest": "Time Off Request",

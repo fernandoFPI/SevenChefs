@@ -269,7 +269,15 @@
     "totalEmployees": "إجمالي الموظفين",
     "fullBalance": "الرصيد الكامل",
     "partiallyUsed": "مستخدم جزئياً",
-    "fullyUsed": "مستخدم بالكامل"
+    "fullyUsed": "مستخدم بالكامل",
+    "grantTimeOff": "منح إجازة",
+    "grantFor": "الموظف",
+    "deductFromBalance": "خصم من الرصيد",
+    "bonusLeave": "إجازة استثنائية (بدون خصم من الرصيد)",
+    "currentBalance": "الرصيد الحالي",
+    "exceedsBalance": "يتجاوز الرصيد المتبقي بمقدار {{n}} يوم. يمكنك المتابعة.",
+    "grantSuccess": "تم منح الإجازة لـ {{employee}}",
+    "grantedBy": "ممنوحة من {{name}}"
   },
   "request": {
     "timeOffRequest": "طلب إجازة مدفوعة",

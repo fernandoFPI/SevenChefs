@@ -1,4 +1,5 @@
 const { query } = require('../config/db');
+const { createNotification } = require('../services/notificationService');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ async function getOrCreateBalance(employeeId, year) {
 // ADMIN / ACCOUNTANT / MANAGER → can query any employee via ?employee_id=
 async function getBalance(req, res) {
   try {
-    const { role, id: userId } = req.user;
+    const { role, userId } = req.user;
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
 
     let employeeId = req.query.employee_id;
@@ -141,4 +142,130 @@ async function adjustBalance(req, res) {
   }
 }
 
-module.exports = { getBalance, getAllBalances, adjustBalance, getOrCreateBalance };
+// ── POST /api/time-off/grant ──────────────────────────────────────────────────
+// ADMIN / MANAGER / ACCOUNTANT — directly grant time off on behalf of an employee
+async function grantTimeOff(req, res) {
+  try {
+    const { userId, role } = req.user;
+    const { employee_id, date_from, date_to, reason, deduct_from_balance } = req.body;
+
+    if (!employee_id || !date_from || !date_to) {
+      return res.status(400).json({ message: 'employee_id, date_from, and date_to are required' });
+    }
+    if (date_to < date_from) {
+      return res.status(400).json({ message: 'date_to must be on or after date_from' });
+    }
+
+    // 1. Validate employee
+    const { rows: empRows } = await query(
+      `SELECT id, name FROM employees WHERE id = $1 AND is_active = true`, [employee_id]
+    );
+    if (!empRows.length) return res.status(404).json({ message: 'Employee not found' });
+    const employee = empRows[0];
+
+    // Granter display name
+    const { rows: granterRows } = await query(`SELECT username FROM users WHERE id = $1`, [userId]);
+    const granterName = granterRows[0]?.username || role;
+
+    // 2. Calculate working days respecting employee's schedule (0=Mon convention)
+    const { rows: schedRows } = await query(
+      `SELECT s.working_days FROM employees e LEFT JOIN schedules s ON s.id = e.schedule_id WHERE e.id = $1`,
+      [employee_id]
+    );
+    const workingDaysList = schedRows[0]?.working_days;
+
+    const updatedDates = [];
+    const cur = new Date(date_from + 'T00:00:00Z');
+    const end = new Date(date_to   + 'T00:00:00Z');
+    while (cur <= end) {
+      const dow = (cur.getUTCDay() + 6) % 7;
+      if (!workingDaysList || workingDaysList.includes(dow)) {
+        updatedDates.push(cur.toISOString().slice(0, 10));
+      }
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    const totalDays = updatedDates.length;
+    if (totalDays === 0) {
+      return res.status(400).json({ message: 'No working days in the selected date range' });
+    }
+
+    // 3. Check balance (warn but don't block)
+    const year = new Date(date_from).getFullYear();
+    const balance = await getOrCreateBalance(employee_id, year);
+    let warning = null;
+    if (deduct_from_balance && totalDays > balance.remaining) {
+      warning = `Exceeds remaining balance by ${totalDays - balance.remaining} day(s)`;
+    }
+
+    // 4. Upsert attendance_daily → LEAVE_PAID for each working day
+    for (const dateStr of updatedDates) {
+      await query(
+        `INSERT INTO attendance_daily
+           (employee_id, date, status, hours_worked, late_hours, ot_hours, is_manually_edited)
+         VALUES ($1, $2, 'LEAVE_PAID', 0, 0, 0, true)
+         ON CONFLICT (employee_id, date) DO UPDATE
+           SET status             = 'LEAVE_PAID',
+               hours_worked       = 0,
+               late_hours         = 0,
+               ot_hours           = 0,
+               is_manually_edited = true,
+               updated_at         = NOW()`,
+        [employee_id, dateStr]
+      );
+    }
+
+    // 5. Deduct balance if requested
+    if (deduct_from_balance) {
+      await query(
+        `UPDATE time_off_balances
+         SET used_days  = used_days + $1, updated_at = NOW()
+         WHERE employee_id = $2 AND year = $3`,
+        [totalDays, employee_id, year]
+      );
+    }
+
+    // 6. Audit trail — create a pre-approved request record
+    const { rows: reqRows } = await query(
+      `INSERT INTO requests
+         (employee_id, type, date_from, date_to, total_days, status,
+          reason, admin_id, admin_action, admin_note, admin_acted_at)
+       VALUES ($1,'TIME_OFF_REQUEST',$2,$3,$4,'APPROVED',$5,$6,'APPROVE',$7,NOW())
+       RETURNING *`,
+      [employee_id, date_from, date_to, totalDays, reason || null,
+       userId, `Granted directly by ${role}`]
+    );
+    const auditRequest = reqRows[0];
+
+    // 7. Notify the employee
+    const { rows: empUser } = await query(
+      `SELECT u.id AS user_id FROM users u JOIN employees e ON e.id = u.employee_id WHERE e.id = $1`,
+      [employee_id]
+    );
+    if (empUser.length) {
+      await createNotification({
+        userId:    empUser[0].user_id,
+        type:      'REQUEST_APPROVED',
+        message:   `Your time off from ${date_from} to ${date_to} has been approved by ${granterName}.`,
+        messageAr: `تمت الموافقة على إجازتك من ${date_from} إلى ${date_to} من قِبل ${granterName}.`,
+        requestId: auditRequest.id,
+      });
+    }
+
+    // 8. Return updated balance
+    const updatedBalance = await getOrCreateBalance(employee_id, year);
+
+    res.json({
+      message:           'Time off granted successfully',
+      employee_name:     employee.name,
+      total_days:        totalDays,
+      balance_remaining: updatedBalance.remaining,
+      dates_updated:     updatedDates,
+      ...(warning && { warning }),
+    });
+  } catch (err) {
+    console.error('[timeOff] grantTimeOff:', err.message);
+    res.status(500).json({ message: 'Failed to grant time off' });
+  }
+}
+
+module.exports = { getBalance, getAllBalances, adjustBalance, getOrCreateBalance, grantTimeOff };
