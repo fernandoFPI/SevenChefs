@@ -19,9 +19,20 @@ function isValidTime(t) {
 
 function timeDiffHours(startStr, endStr) {
   const s = parseTimeToMins(startStr);
-  const e = parseTimeToMins(endStr);
+  let e   = parseTimeToMins(endStr);
   if (s === null || e === null) return 0;
+  // Cross-midnight: checkout in early morning (00:00–07:59) and before start → add 24h
+  if (e < s && e < 8 * 60) e += 24 * 60;
   return round2(Math.max(0, e - s) / 60);
+}
+
+// Returns false only when checkout is clearly same-day but before check-in.
+// Checkouts before 08:00 are treated as next-day and always accepted.
+function isValidCheckout(checkIn, checkOut) {
+  if (!checkIn || !checkOut) return true;
+  const outH = parseInt(checkOut.split(':')[0], 10);
+  if (outH < 8) return true;
+  return parseTimeToMins(checkOut) > parseTimeToMins(checkIn);
 }
 
 function punchToTime(punch) {
@@ -59,11 +70,11 @@ async function saveCorrection(req, res) {
     }
 
     if (corrected_check_in && corrected_check_out) {
-      if (parseTimeToMins(corrected_check_out) <= parseTimeToMins(corrected_check_in))
+      if (!isValidCheckout(corrected_check_in, corrected_check_out))
         return res.status(400).json({ message: 'Check-out must be after check-in' });
     }
     if (corrected_ot_in && corrected_ot_out) {
-      if (parseTimeToMins(corrected_ot_out) <= parseTimeToMins(corrected_ot_in))
+      if (!isValidCheckout(corrected_ot_in, corrected_ot_out))
         return res.status(400).json({ message: 'OT check-out must be after OT check-in' });
     }
 

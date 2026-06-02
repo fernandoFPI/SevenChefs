@@ -204,4 +204,35 @@ async function removeLeave(req, res) {
   }
 }
 
-module.exports = { getDaily, updateDaily, recalculate, recordLeave, removeLeave };
+// ── POST /api/attendance/daily/clear ─────────────────────────────────────────
+// Hard-deletes attendance_daily + punch_corrections for one employee + month,
+// then reprocesses from raw punches. employee_id is required.
+async function clearAndReprocess(req, res) {
+  try {
+    const { employee_id, month } = req.body;
+    if (!employee_id) return res.status(400).json({ message: 'employee_id is required' });
+
+    const monthStr = month || new Date().toISOString().slice(0, 7);
+    const [year, monthNum] = monthStr.split('-').map(Number);
+    const dateFrom = `${year}-${String(monthNum).padStart(2, '0')}-01`;
+    const lastDay  = new Date(year, monthNum, 0).getDate();
+    const dateTo   = `${year}-${String(monthNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    await db.query(
+      `DELETE FROM punch_corrections WHERE employee_id = $1 AND date >= $2 AND date <= $3`,
+      [employee_id, dateFrom, dateTo]
+    );
+    const { rowCount } = await db.query(
+      `DELETE FROM attendance_daily WHERE employee_id = $1 AND date >= $2 AND date <= $3`,
+      [employee_id, dateFrom, dateTo]
+    );
+
+    const processed = await processAttendance({ employeeIds: [employee_id], month: monthStr });
+    res.json({ message: 'Cleared and reprocessed', deleted: rowCount, processed });
+  } catch (err) {
+    console.error('[daily] clearAndReprocess:', err.message);
+    res.status(500).json({ message: 'Failed to clear and reprocess' });
+  }
+}
+
+module.exports = { getDaily, updateDaily, recalculate, recordLeave, removeLeave, clearAndReprocess };

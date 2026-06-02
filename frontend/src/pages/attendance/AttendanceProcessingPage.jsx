@@ -334,6 +334,30 @@ function EditModal({ record, onClose, onSaved, userRole }) {
             <div className="text-xs text-gray-400">Loading punch data…</div>
           ) : (
             <div className="space-y-3">
+              {/* All raw punches */}
+              {rawPunches.length > 0 && (() => {
+                const STATE_LABELS = { '0':'Check-In','1':'Check-Out','2':'Break-Out','3':'Break-In','4':'OT-In','5':'OT-Out' };
+                const STATE_COLORS = { '0':'text-green-700','1':'text-red-700','2':'text-orange-600','3':'text-blue-600','4':'text-purple-700','5':'text-purple-500' };
+                return (
+                  <div className="rounded bg-gray-50 border border-gray-100 p-2">
+                    <p className="text-xs font-medium text-gray-500 mb-1.5">All Punches ({rawPunches.length})</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {rawPunches.map((p, i) => {
+                        const d = new Date(p.punch_time);
+                        const hhmm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                        const s = String(p.punch_state ?? '');
+                        return (
+                          <span key={i} className="text-xs font-mono">
+                            <span className={`font-medium ${STATE_COLORS[s] || 'text-gray-600'}`}>{STATE_LABELS[s] || `State ${s}`}</span>
+                            <span className="text-gray-500 ml-1">{hhmm}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Check-In row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -359,6 +383,10 @@ function EditModal({ record, onClose, onSaved, userRole }) {
                   <input type="time" value={correction.corrected_check_out}
                     onChange={e => setCorrection(c => ({ ...c, corrected_check_out: e.target.value }))}
                     className={timeInputClass} />
+                  {correction.corrected_check_out && correction.corrected_check_in &&
+                    parseInt(correction.corrected_check_out.split(':')[0], 10) < 8 && (
+                    <p className="text-xs text-blue-600 mt-0.5">+1 (next day)</p>
+                  )}
                 </div>
               </div>
 
@@ -387,6 +415,10 @@ function EditModal({ record, onClose, onSaved, userRole }) {
                       <input type="time" value={correction.corrected_ot_out}
                         onChange={e => setCorrection(c => ({ ...c, corrected_ot_out: e.target.value }))}
                         className={timeInputClass} />
+                      {correction.corrected_ot_out && correction.corrected_ot_in &&
+                        parseInt(correction.corrected_ot_out.split(':')[0], 10) < 8 && (
+                        <p className="text-xs text-blue-600 mt-0.5">+1 (next day)</p>
+                      )}
                     </div>
                   </div>
                 </>
@@ -468,6 +500,7 @@ export default function AttendanceProcessingPage() {
   const [employees, setEmployees]       = useState([]);
   const [records, setRecords]           = useState([]);
   const [recalculating, setRecalc]      = useState(false);
+  const [clearing, setClearing]         = useState(false);
   const [toast, setToast]               = useState(null);
   const [editRecord, setEditRecord]     = useState(null);
   const [openDropdownId, setOpenDropdownId] = useState(null);
@@ -496,6 +529,23 @@ export default function AttendanceProcessingPage() {
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
   }, [openDropdownId]);
+
+  async function handleClear() {
+    if (!employeeId) return;
+    const emp = employees.find(e => String(e.id) === String(employeeId));
+    const label = emp ? `${emp.name} — ${month}` : month;
+    if (!window.confirm(`Clear and reprocess attendance for ${label}?\n\nThis will permanently delete all records and punch corrections for this employee/month and rebuild from raw punches.`)) return;
+    setClearing(true);
+    try {
+      await api.post('/attendance/daily/clear', { employee_id: employeeId, month });
+      setToast({ message: `Cleared and reprocessed ${label}`, type: 'success' });
+      fetchRecords();
+    } catch (err) {
+      setToast({ message: err.message, type: 'error' });
+    } finally {
+      setClearing(false);
+    }
+  }
 
   async function handleRecalculate() {
     setRecalc(true);
@@ -605,6 +655,18 @@ export default function AttendanceProcessingPage() {
             {isAdmin && (
               <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={recalculating}>
                 {recalculating ? t('attendance.recalculating') : t('attendance.recalculate')}
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleClear}
+                disabled={clearing || !employeeId}
+                title={!employeeId ? 'Select an employee first' : undefined}
+                className="border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-40"
+              >
+                {clearing ? 'Clearing…' : 'Clear & Reprocess'}
               </Button>
             )}
           </div>

@@ -7,9 +7,10 @@ const ctrl = require('../controllers/attendanceDailyController');
 const VIEW  = ['ADMIN', 'ACCOUNTANT', 'MANAGER'];
 const EDIT  = ['ADMIN', 'ACCOUNTANT'];
 
-// recalculate MUST be registered before /:id to avoid route collision
-router.post('/recalculate', requireAuth, requireRole(...EDIT), ctrl.recalculate);
-router.get('/',             requireAuth, requireRole(...VIEW), ctrl.getDaily);
-router.put('/:id',          requireAuth, requireRole(...VIEW), ctrl.updateDaily);
+// named routes MUST be registered before /:id to avoid route collision
+router.post('/recalculate',       requireAuth, requireRole(...EDIT), ctrl.recalculate);
+router.post('/clear',             requireAuth, requireRole(...EDIT), ctrl.clearAndReprocess);
+router.get('/',                   requireAuth, requireRole(...VIEW), ctrl.getDaily);
+router.put('/:id',                requireAuth, requireRole(...VIEW), ctrl.updateDaily);
 
 module.exports = router;
