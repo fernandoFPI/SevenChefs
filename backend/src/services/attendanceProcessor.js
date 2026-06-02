@@ -66,6 +66,13 @@ function getNextDateStr(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
+// Decrement a 'YYYY-MM-DD' string by one calendar day.
+function getPrevDateStr(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // Returns true if dateStr is the 5th occurrence of its weekday in that month.
 // e.g. the 5th Saturday of May → mandatory working day even if normally off.
 function isFifthWeekdayOccurrence(dateStr) {
@@ -331,13 +338,13 @@ async function processAttendance(options = {}) {
       ]
     );
 
-    // Group punches by local date string 'YYYY-MM-DD' (for normal shifts).
-    // Also build a flat list with per-punch local date + local minutes for cross-midnight
-    // window matching.
+    // Group punches by local date string 'YYYY-MM-DD'.
+    // Cross-midnight rule: a Check-Out (state '1') between 00:00–02:59 Asia/Baghdad
+    // belongs to the PREVIOUS calendar day (the night shift that started that evening).
     // pg may return DATE as a local-midnight Date object; use local getters so UTC+3
     // midnight (= previous day in UTC) doesn't shift the date back by one day.
-    const punchMap     = new Map();
-    const allPunchList = [];
+    const CROSS_MIDNIGHT_CUTOFF = 3; // 03:00 AM
+    const punchMap = new Map();
     for (const p of punches) {
       let day;
       if (p.day instanceof Date) {
@@ -346,23 +353,23 @@ async function processAttendance(options = {}) {
       } else {
         day = String(p.day).slice(0, 10);
       }
-      const punchTime = new Date(p.punch_time);
-      const entry     = { time: punchTime, state: String(p.punch_state ?? '') };
+      const punchTime  = new Date(p.punch_time);
+      const punchState = String(p.punch_state ?? '');
+
+      if (punchState === '1') {
+        const localHour = parseInt(new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Baghdad',
+          hour:     'numeric',
+          hour12:   false,
+        }).format(punchTime), 10);
+        if (localHour < CROSS_MIDNIGHT_CUTOFF) {
+          day = getPrevDateStr(day);
+        }
+      }
+
       if (!punchMap.has(day)) punchMap.set(day, []);
-      punchMap.get(day).push(entry);
-
-      allPunchList.push({
-        id:           String(p.id),
-        time:         punchTime,
-        state:        String(p.punch_state ?? ''),
-        localDate:    day,
-        localMinutes: getLocalMinutes(punchTime),
-      });
+      punchMap.get(day).push({ time: punchTime, state: punchState });
     }
-
-    // Tracks punch IDs already assigned to a shift window (cross-midnight only).
-    // Prevents a checkout punch from being counted in two adjacent day windows.
-    const usedPunchIds = new Set();
 
     for (const dateStr of dates) {
       // Skip if manually edited.
@@ -460,26 +467,9 @@ async function processAttendance(options = {}) {
         isShiftCover  = true;
       }
 
-      // For cross-midnight shifts, collect punches spanning two calendar days using
-      // a shift window [shiftStart-2h … nextDay+shiftEnd+2h] and track used IDs
-      // so a checkout punch isn't counted for both this day and the previous one.
-      let dayPunches;
-      if (isCrossMidnight(dayShiftStart, dayShiftEnd)) {
-        const startMins = shiftTimeToMinutes(dayShiftStart);
-        const endMins   = shiftTimeToMinutes(dayShiftEnd);
-        const bufMins   = 2 * 60; // 2-hour grace buffer
-        const nxtDate   = getNextDateStr(dateStr);
-        const matched   = allPunchList.filter(p => {
-          if (usedPunchIds.has(p.id)) return false;
-          if (p.localDate === dateStr && p.localMinutes >= Math.max(0, startMins - bufMins)) return true;
-          if (p.localDate === nxtDate  && p.localMinutes <= endMins + bufMins)               return true;
-          return false;
-        });
-        matched.forEach(p => usedPunchIds.add(p.id));
-        dayPunches = matched.map(p => ({ time: p.time, state: p.state }));
-      } else {
-        dayPunches = punchMap.get(dateStr) || [];
-      }
+      // Punches are pre-assigned to the correct calendar day during map construction
+      // (early-morning Check-Out punches moved to the previous day by CROSS_MIDNIGHT_CUTOFF).
+      const dayPunches = punchMap.get(dateStr) || [];
 
       const leaveType  = leaveMap.get(dateStr) || null;
 
