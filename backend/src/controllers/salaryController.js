@@ -148,6 +148,24 @@ async function approveAll(req, res) {
   }
 }
 
+async function notifySalaryRejection(record, note) {
+  const { rows: accountants } = await db.query(
+    `SELECT id FROM users WHERE role = 'ACCOUNTANT'`
+  );
+
+  const noteText = note ? ` Note: ${note}` : '';
+  const noteAr = note ? ` ملاحظة: ${note}` : '';
+
+  for (const acc of accountants) {
+    await createNotification({
+      userId: acc.id,
+      type: 'SALARY_REJECTED',
+      message: `Salary record for ${record.employee_name} (${record.period_month}) was rejected and returned to Draft.${noteText}`,
+      messageAr: `تم رفض سجل راتب ${record.employee_name} (${record.period_month}) وإعادته إلى المسودة.${noteAr}`,
+    });
+  }
+}
+
 // POST /api/salary/:id/reject  (body: { note })
 // Returns record to DRAFT so accountant can edit and resubmit.
 async function rejectOne(req, res) {
@@ -183,6 +201,29 @@ async function rejectOne(req, res) {
   } catch (err) {
     console.error('[salary] rejectOne:', err.message);
     res.status(500).json({ message: 'Reject failed' });
+  }
+}
+
+// POST /api/salary/reject-all  (body: { month })
+async function rejectAll(req, res) {
+  try {
+    const month = req.body.month || getPrevMonth();
+    const { rows } = await db.query(
+      `UPDATE salary_records
+       SET status = 'DRAFT', updated_at = NOW()
+       WHERE period_month = $1 AND status = 'SUBMITTED'
+       RETURNING *, (SELECT e.name FROM employees e WHERE e.id = salary_records.employee_id) AS employee_name`,
+      [month]
+    );
+
+    for (const record of rows) {
+      await notifySalaryRejection(record, null);
+    }
+
+    res.json({ message: 'All rejected', count: rows.length });
+  } catch (err) {
+    console.error('[salary] rejectAll:', err.message);
+    res.status(500).json({ message: 'Reject all failed' });
   }
 }
 
@@ -358,4 +399,4 @@ async function exportSalaryExcel(rows, month, res) {
   res.end();
 }
 
-module.exports = { calculate, list, update, submit, approveOne, approveAll, rejectOne, exportSalary };
+module.exports = { calculate, list, update, submit, approveOne, approveAll, rejectOne, rejectAll, exportSalary };

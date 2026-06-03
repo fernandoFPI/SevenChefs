@@ -8,6 +8,7 @@ const ctrl = require('../controllers/salaryController');
 router.post('/calculate',   requireAuth, requireRole('ADMIN', 'ACCOUNTANT'), ctrl.calculate);
 router.post('/submit',      requireAuth, requireRole('ADMIN', 'ACCOUNTANT'), ctrl.submit);
 router.post('/approve-all', requireAuth, requireRole('ADMIN'),               ctrl.approveAll);
+router.post('/reject-all',  requireAuth, requireRole('ADMIN'),               ctrl.rejectAll);
 router.get('/export',       requireAuth, requireRole('ADMIN', 'ACCOUNTANT'), ctrl.exportSalary);
 
 router.get('/',             requireAuth, requireRole('ADMIN', 'ACCOUNTANT'), ctrl.list);
