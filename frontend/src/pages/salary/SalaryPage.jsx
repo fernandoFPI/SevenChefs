@@ -175,6 +175,15 @@ export default function SalaryPage() {
     } catch (e) { showToast(e.message || 'Error'); }
   }
 
+  async function handleRejectAll() {
+    if (!window.confirm(t('salary.confirmRejectAll'))) return;
+    try {
+      await api.post('/salary/reject-all', { month });
+      showToast(t('salary.rejected'));
+      fetchRecords();
+    } catch (e) { showToast(e.message || 'Error'); }
+  }
+
   async function handleApproveOne(id) {
     if (!window.confirm(t('salary.confirmApprove'))) return;
     try {
@@ -346,12 +355,20 @@ export default function SalaryPage() {
           )}
 
           {isAdmin && hasSubmitted && (
-            <button
-              onClick={handleApproveAll}
-              className="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
-            >
-              {t('salary.approveAll')}
-            </button>
+            <>
+              <button
+                onClick={handleApproveAll}
+                className="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+              >
+                {t('salary.approveAll')}
+              </button>
+              <button
+                onClick={handleRejectAll}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              >
+                {t('salary.rejectAll')}
+              </button>
+            </>
           )}
 
           {records.length > 0 && (
