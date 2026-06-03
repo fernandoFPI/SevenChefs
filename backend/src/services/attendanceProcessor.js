@@ -342,11 +342,11 @@ async function processAttendance(options = {}) {
     );
 
     // Group punches by local date string 'YYYY-MM-DD'.
-    // Cross-midnight rule: a Check-Out (state '1') between 00:00–02:59 Asia/Baghdad
+    // Cross-midnight rule: a Check-Out (state '1') before 05:00 Asia/Baghdad
     // belongs to the PREVIOUS calendar day (the night shift that started that evening).
     // pg may return DATE as a local-midnight Date object; use local getters so UTC+3
     // midnight (= previous day in UTC) doesn't shift the date back by one day.
-    const CROSS_MIDNIGHT_CUTOFF = 3; // 03:00 AM
+    const CROSS_MIDNIGHT_CUTOFF_MINS = 5 * 60; // 05:00 AM in minutes
     const punchMap = new Map();
     for (const p of punches) {
       let day;
@@ -360,13 +360,7 @@ async function processAttendance(options = {}) {
       const punchState = String(p.punch_state ?? '');
 
       if (punchState === '1') {
-        let localHour = parseInt(new Intl.DateTimeFormat('en-US', {
-          timeZone: 'Asia/Baghdad',
-          hour:     'numeric',
-          hour12:   false,
-        }).format(punchTime), 10);
-        if (localHour === 24) localHour = 0; // some Node versions return 24 for midnight
-        if (localHour < CROSS_MIDNIGHT_CUTOFF) {
+        if (getLocalMinutes(punchTime) < CROSS_MIDNIGHT_CUTOFF_MINS) {
           day = getPrevDateStr(day);
         }
       }
