@@ -113,13 +113,15 @@ async function saveCorrection(req, res) {
       [employee_id, date]
     );
 
+    const inPunches   = rawPunches.filter(p => String(p.punch_state) === '0');
+    const outPunches  = rawPunches.filter(p => String(p.punch_state) === '1');
     const stdPunches  = rawPunches.filter(p => ['0','1','2','3'].includes(String(p.punch_state)));
     const otInPunch   = rawPunches.find(p => String(p.punch_state) === '4');
     const otOutPunches = rawPunches.filter(p => String(p.punch_state) === '5');
     const otOutPunch  = otOutPunches.length ? otOutPunches[otOutPunches.length - 1] : null;
 
-    const original_check_in  = stdPunches.length > 0 ? punchToTime(stdPunches[0]) : null;
-    const original_check_out = stdPunches.length > 1 ? punchToTime(stdPunches[stdPunches.length - 1]) : null;
+    const original_check_in  = inPunches.length  > 0 ? punchToTime(inPunches[0])                   : null;
+    const original_check_out = outPunches.length > 0 ? punchToTime(outPunches[outPunches.length - 1]) : null;
     const original_ot_in     = punchToTime(otInPunch);
     const original_ot_out    = punchToTime(otOutPunch);
 
@@ -129,7 +131,37 @@ async function saveCorrection(req, res) {
     const effOtIn     = corrected_ot_in     || original_ot_in;
     const effOtOut    = corrected_ot_out    || original_ot_out;
 
-    const hours_worked = (effCheckIn && effCheckOut) ? timeDiffHours(effCheckIn, effCheckOut) : 0;
+    // Segment-aware hours calculation: pair each IN with its corresponding OUT.
+    // Supports split-shift employees with multiple IN/OUT pairs.
+    // Corrected times replace the first IN and last OUT respectively.
+    let hours_worked = 0;
+    if (effCheckIn && effCheckOut) {
+      if (inPunches.length > 1 && outPunches.length > 1) {
+        const ins  = inPunches.map(p => new Date(p.punch_time));
+        const outs = outPunches.map(p => new Date(p.punch_time));
+
+        if (corrected_check_in) {
+          const [h, m] = corrected_check_in.split(':').map(Number);
+          ins[0] = new Date(ins[0]);
+          ins[0].setHours(h, m, 0, 0);
+        }
+        if (corrected_check_out) {
+          const [h, m] = corrected_check_out.split(':').map(Number);
+          const last = new Date(outs[outs.length - 1]);
+          last.setHours(h, m, 0, 0);
+          if (h < 8) last.setDate(last.getDate() + 1); // cross-midnight checkout
+          outs[outs.length - 1] = last;
+        }
+
+        const pairs = Math.min(ins.length, outs.length);
+        for (let i = 0; i < pairs; i++) {
+          hours_worked += (outs[i] - ins[i]) / 3_600_000;
+        }
+        hours_worked = round2(Math.max(0, hours_worked));
+      } else {
+        hours_worked = timeDiffHours(effCheckIn, effCheckOut);
+      }
+    }
     let ot_hours, late_hours;
     if (otMode === 'CALCULATED') {
       ot_hours   = round2(Math.max(0, hours_worked - stdHours));
