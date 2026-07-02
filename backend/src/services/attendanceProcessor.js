@@ -503,9 +503,7 @@ async function processAttendance(options = {}) {
           lateHours   = 0;
           otHours     = 0;
         } else {
-          const result = (!hasPattern && emp.secondary_shift_id)
-            ? calcDaySplit(dayPunches, dayStdHours)
-            : calcDay(dayPunches, dayStdHours);
+          const result = calcDaySplit(dayPunches, dayStdHours);
           hoursWorked  = result.hoursWorked;
           lateHours    = result.lateHours;
           if (otMode === 'CALCULATED') {
