@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { processAttendance } = require('../services/attendanceProcessor');
+const { processAttendance, pairCheckPunches } = require('../services/attendanceProcessor');
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -102,13 +102,33 @@ async function saveCorrection(req, res) {
     const stdHours = parseFloat(empResult.rows[0]?.std_hours_per_day) || 8;
     const otMode   = otModeResult.rows[0]?.value || 'OT_PUNCH';
 
-    // Load raw punches for that day (ascending)
+    // Load raw punches for that day (ascending), applying the same cross-midnight
+    // rule as attendanceProcessor.js: an early-morning (<05:00 Asia/Baghdad)
+    // Check-Out belongs to the PREVIOUS calendar day's shift, not the day it's
+    // timestamped on. Without this, a night-shift's real closing punch falls
+    // into the next day's window and this query instead picks up the previous
+    // night's leftover checkout, producing a bogus IN→OUT pairing.
     const { rows: rawPunches } = await db.query(
-      `SELECT punch_time, punch_state
+      `SELECT punch_time, COALESCE(overridden_state, punch_state) AS punch_state
        FROM attendance_raw
        WHERE employee_id = $1
-         AND punch_time >= $2
-         AND punch_time <  ($2::date + INTERVAL '1 day')
+         AND is_ignored = false
+         AND (
+           (
+             DATE(punch_time AT TIME ZONE 'Asia/Baghdad') = $2::date
+             AND NOT (
+               COALESCE(overridden_state, punch_state) = '1'
+               AND (EXTRACT(HOUR   FROM punch_time AT TIME ZONE 'Asia/Baghdad') * 60
+                  + EXTRACT(MINUTE FROM punch_time AT TIME ZONE 'Asia/Baghdad')) < 300
+             )
+           )
+           OR (
+             DATE(punch_time AT TIME ZONE 'Asia/Baghdad') = ($2::date + INTERVAL '1 day')
+             AND COALESCE(overridden_state, punch_state) = '1'
+             AND (EXTRACT(HOUR   FROM punch_time AT TIME ZONE 'Asia/Baghdad') * 60
+                + EXTRACT(MINUTE FROM punch_time AT TIME ZONE 'Asia/Baghdad')) < 300
+           )
+         )
        ORDER BY punch_time ASC`,
       [employee_id, date]
     );
@@ -125,43 +145,52 @@ async function saveCorrection(req, res) {
     const original_ot_in     = punchToTime(otInPunch);
     const original_ot_out    = punchToTime(otOutPunch);
 
-    // Effective times: corrected if provided, else original
-    const effCheckIn  = corrected_check_in  || original_check_in;
-    const effCheckOut = corrected_check_out || original_check_out;
-    const effOtIn     = corrected_ot_in     || original_ot_in;
-    const effOtOut    = corrected_ot_out    || original_ot_out;
+    // Effective OT times: corrected if provided, else original
+    const effOtIn  = corrected_ot_in  || original_ot_in;
+    const effOtOut = corrected_ot_out || original_ot_out;
 
-    // Segment-aware hours calculation: pair each IN with its corresponding OUT.
-    // Supports split-shift employees with multiple IN/OUT pairs.
-    // Corrected times replace the first IN and last OUT respectively.
-    let hours_worked = 0;
-    if (effCheckIn && effCheckOut) {
-      if (inPunches.length > 1 && outPunches.length > 1) {
-        const ins  = inPunches.map(p => new Date(p.punch_time));
-        const outs = outPunches.map(p => new Date(p.punch_time));
+    // Segment-aware hours calculation: pair each Check-In with the NEXT
+    // Check-Out in chronological order (same rule as attendanceProcessor's
+    // calcDaySplit), so a day with more than one IN/OUT never gets bridged
+    // across a gap where a punch is actually missing. A correction only ever
+    // overrides the day's first check-in and/or last check-out; every other
+    // punch in between is left untouched.
+    const stdCheckPunches = rawPunches
+      .filter(p => ['0', '1'].includes(String(p.punch_state)))
+      .map(p => ({ time: new Date(p.punch_time), state: String(p.punch_state) }));
 
-        if (corrected_check_in) {
-          const [h, m] = corrected_check_in.split(':').map(Number);
-          ins[0] = new Date(ins[0]);
-          ins[0].setHours(h, m, 0, 0);
-        }
-        if (corrected_check_out) {
-          const [h, m] = corrected_check_out.split(':').map(Number);
-          const last = new Date(outs[outs.length - 1]);
-          last.setHours(h, m, 0, 0);
-          if (h < 8) last.setDate(last.getDate() + 1); // cross-midnight checkout
-          outs[outs.length - 1] = last;
-        }
-
-        const pairs = Math.min(ins.length, outs.length);
-        for (let i = 0; i < pairs; i++) {
-          hours_worked += (outs[i] - ins[i]) / 3_600_000;
-        }
-        hours_worked = round2(Math.max(0, hours_worked));
+    if (corrected_check_in) {
+      const [h, m]  = corrected_check_in.split(':').map(Number);
+      const firstIn = stdCheckPunches.find(p => p.state === '0');
+      if (firstIn) {
+        firstIn.time = new Date(firstIn.time);
+        firstIn.time.setHours(h, m, 0, 0);
       } else {
-        hours_worked = timeDiffHours(effCheckIn, effCheckOut);
+        const t = new Date(`${date}T00:00:00`);
+        t.setHours(h, m, 0, 0);
+        stdCheckPunches.push({ time: t, state: '0' });
       }
     }
+    if (corrected_check_out) {
+      const [h, m] = corrected_check_out.split(':').map(Number);
+      const outs   = stdCheckPunches.filter(p => p.state === '1');
+      if (outs.length) {
+        const lastOut = outs[outs.length - 1];
+        lastOut.time  = new Date(lastOut.time);
+        lastOut.time.setHours(h, m, 0, 0);
+        if (h < 8) lastOut.time.setDate(lastOut.time.getDate() + 1); // cross-midnight checkout
+      } else {
+        const t = new Date(`${date}T00:00:00`);
+        t.setHours(h, m, 0, 0);
+        if (h < 8) t.setDate(t.getDate() + 1); // cross-midnight checkout
+        stdCheckPunches.push({ time: t, state: '1' });
+      }
+    }
+    stdCheckPunches.sort((a, b) => a.time - b.time);
+
+    const { stdHoursWorked, missingPunch: stdMissingPunch } = pairCheckPunches(stdCheckPunches);
+    const hours_worked = stdHoursWorked;
+
     let ot_hours, late_hours;
     if (otMode === 'CALCULATED') {
       ot_hours   = round2(Math.max(0, hours_worked - stdHours));
@@ -172,11 +201,9 @@ async function saveCorrection(req, res) {
     }
 
     // Determine missing_punch after correction
-    let missing_punch = null;
-    if (effCheckIn && !effCheckOut)  missing_punch = 'OUT';
-    if (!effCheckIn && effCheckOut)  missing_punch = 'IN';
-    if (effOtIn && !effOtOut)        missing_punch = 'OT_OUT';
-    if (!effOtIn && effOtOut)        missing_punch = 'OT_IN';
+    let missing_punch = stdMissingPunch;
+    if (effOtIn && !effOtOut) missing_punch = 'OT_OUT';
+    if (!effOtIn && effOtOut) missing_punch = 'OT_IN';
 
     // Upsert correction record
     await db.query(

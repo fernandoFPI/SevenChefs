@@ -96,25 +96,42 @@ const STD_STATES  = new Set(['0', '1', '2', '3']);
 const OT_IN_STATE  = '4';
 const OT_OUT_STATE = '5';
 
-// Split-shift variant: pair Check-In (0) / Check-Out (1) punches sequentially.
-// Segment 1 = punch[0]→punch[1], Segment 2 = punch[2]→punch[3], etc.
+// Pairs each Check-In (0) with the NEXT Check-Out (1) by state, in chronological
+// order — not by array position. A Check-In seen while a segment is still open
+// means that segment's checkout was never punched: that segment's hours are
+// dropped and OUT is reported missing, instead of bridging into the next
+// Check-In's time. `checkPunches` must be pre-sorted ascending by time and
+// contain only state '0'/'1' entries.
+function pairCheckPunches(checkPunches) {
+  let stdHoursWorked = 0;
+  let missingPunch   = null;
+  let openIn         = null;
+
+  for (const p of checkPunches) {
+    if (p.state === '0') {
+      if (openIn) missingPunch = 'OUT'; // previous segment's checkout was never punched
+      openIn = p.time;
+    } else if (openIn) {
+      stdHoursWorked += (p.time - openIn) / 3_600_000;
+      openIn = null;
+    } else {
+      missingPunch = 'IN'; // checkout with no matching check-in for this segment
+    }
+  }
+  if (openIn) missingPunch = 'OUT'; // trailing check-in never closed
+
+  return { stdHoursWorked: round2(stdHoursWorked), missingPunch };
+}
+
+// Split-shift variant: segments a day's punches into Check-In/Check-Out pairs.
 // Handles 2 punches (one shift) and 4 punches (two shifts) uniformly.
 function calcDaySplit(dayPunches, stdHours) {
   const checkPunches = dayPunches.filter(p => p.state === '0' || p.state === '1');
   const otPunches    = dayPunches.filter(p => p.state === OT_IN_STATE || p.state === OT_OUT_STATE);
 
-  let stdHoursWorked = 0;
-  let missingPunch   = null;
-
-  if (checkPunches.length >= 2) {
-    for (let i = 0; i + 1 < checkPunches.length; i += 2) {
-      stdHoursWorked += (checkPunches[i + 1].time - checkPunches[i].time) / 3_600_000;
-    }
-    stdHoursWorked = round2(stdHoursWorked);
-    if (checkPunches.length % 2 !== 0) missingPunch = 'OUT';
-  } else if (checkPunches.length === 1) {
-    missingPunch = 'OUT';
-  }
+  const stdResult = pairCheckPunches(checkPunches);
+  const stdHoursWorked = stdResult.stdHoursWorked;
+  let missingPunch = stdResult.missingPunch;
 
   let otHours = 0;
   if (otPunches.length > 0) {
@@ -571,4 +588,4 @@ async function processAttendance(options = {}) {
   return processed;
 }
 
-module.exports = { processAttendance };
+module.exports = { processAttendance, pairCheckPunches };
