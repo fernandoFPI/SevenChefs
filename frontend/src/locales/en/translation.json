@@ -219,6 +219,8 @@
     "punchTimes": "Punch Times",
     "checkIn": "Check-In",
     "checkOut": "Check-Out",
+    "shift1": "Shift 1",
+    "shift2": "Shift 2",
     "otCheckIn": "OT Check-In",
     "otCheckOut": "OT Check-Out",
     "original": "Original",

@@ -166,18 +166,23 @@ function EditModal({ record, onClose, onSaved, userRole }) {
     note:         record.note || '',
   });
   const [correction, setCorrection] = useState({
-    corrected_check_in:  '',
-    corrected_check_out: '',
-    corrected_ot_in:     '',
-    corrected_ot_out:    '',
+    corrected_check_in:    '',
+    corrected_check_out:   '',
+    corrected_check_in_2:  '',
+    corrected_check_out_2: '',
+    corrected_ot_in:       '',
+    corrected_ot_out:      '',
     note: '',
   });
   const [rawPunches,        setRawPunches]        = useState([]);
+  const [isTwoShift,        setIsTwoShift]        = useState(false);
   const [existingCorrection, setExistingCorrection] = useState(null);
   const [loadingPunches,    setLoadingPunches]    = useState(true);
   const [saving,            setSaving]            = useState(false);
   const [removing,          setRemoving]          = useState(false);
-  const [originalTimes,     setOriginalTimes]     = useState({ checkIn: null, checkOut: null, otIn: null, otOut: null });
+  const [originalTimes,     setOriginalTimes]     = useState({
+    checkIn: null, checkOut: null, checkIn2: null, checkOut2: null, otIn: null, otOut: null,
+  });
   const [originalValues]    = useState({ status: record.status, hours_worked: record.hours_worked });
 
   function punchToTime(punch) {
@@ -189,29 +194,30 @@ function EditModal({ record, onClose, onSaved, userRole }) {
   useEffect(() => {
     const dateStr = String(record.date).slice(0, 10);
     Promise.allSettled([
-      api.get(`/attendance/raw?employee_id=${record.employee_id}&date_from=${dateStr}&date_to=${dateStr}&page_size=100`),
+      api.get(`/attendance/day-punches?employee_id=${record.employee_id}&date=${dateStr}`),
       api.get(`/attendance/corrections/${record.id}`),
-    ]).then(([rawResult, corrResult]) => {
-      let originals = { checkIn: null, checkOut: null, otIn: null, otOut: null };
+    ]).then(([dayResult, corrResult]) => {
+      let originals = { checkIn: null, checkOut: null, checkIn2: null, checkOut2: null, otIn: null, otOut: null };
 
-      if (rawResult.status === 'fulfilled') {
-        const body   = rawResult.value;
-        const rawArr = Array.isArray(body) ? body : (body?.data ?? []);
-        const punches = rawArr.slice().sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+      if (dayResult.status === 'fulfilled') {
+        const body    = dayResult.value;
+        const punches = (body?.punches ?? []).slice().sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
         setRawPunches(punches);
+        setIsTwoShift(!!body?.isTwoShift);
 
-        const checkInPunch  = punches.find(p => String(p.punch_state) === '0');
-        const checkOutAll   = punches.filter(p => String(p.punch_state) === '1');
-        const checkOutPunch = checkOutAll.length ? checkOutAll[checkOutAll.length - 1] : null;
-        const otInPunch     = punches.find(p => String(p.punch_state) === '4');
-        const otOutAll      = punches.filter(p => String(p.punch_state) === '5');
-        const otOutPunch    = otOutAll.length ? otOutAll[otOutAll.length - 1] : null;
+        const otInPunch  = punches.find(p => String(p.punch_state) === '4');
+        const otOutAll   = punches.filter(p => String(p.punch_state) === '5');
+        const otOutPunch = otOutAll.length ? otOutAll[otOutAll.length - 1] : null;
+        const seg1 = body?.segments?.[0] || {};
+        const seg2 = body?.segments?.[1] || {};
 
         originals = {
-          checkIn:  punchToTime(checkInPunch),
-          checkOut: punchToTime(checkOutPunch),
-          otIn:     punchToTime(otInPunch),
-          otOut:    punchToTime(otOutPunch),
+          checkIn:   seg1.checkIn  || null,
+          checkOut:  seg1.checkOut || null,
+          checkIn2:  seg2.checkIn  || null,
+          checkOut2: seg2.checkOut || null,
+          otIn:      punchToTime(otInPunch),
+          otOut:     punchToTime(otOutPunch),
         };
         setOriginalTimes(originals);
       }
@@ -220,36 +226,44 @@ function EditModal({ record, onClose, onSaved, userRole }) {
         const corrRes = corrResult.value;
         setExistingCorrection(corrRes);
         setCorrection({
-          corrected_check_in:  corrRes.corrected_check_in  || '',
-          corrected_check_out: corrRes.corrected_check_out || '',
-          corrected_ot_in:     corrRes.corrected_ot_in     || '',
-          corrected_ot_out:    corrRes.corrected_ot_out    || '',
+          corrected_check_in:    corrRes.corrected_check_in    || '',
+          corrected_check_out:   corrRes.corrected_check_out   || '',
+          corrected_check_in_2:  corrRes.corrected_check_in_2  || '',
+          corrected_check_out_2: corrRes.corrected_check_out_2 || '',
+          corrected_ot_in:       corrRes.corrected_ot_in       || '',
+          corrected_ot_out:      corrRes.corrected_ot_out      || '',
           note: corrRes.note || '',
         });
       } else {
         setCorrection(c => ({
           ...c,
-          corrected_check_in:  originals.checkIn  || '',
-          corrected_check_out: originals.checkOut || '',
-          corrected_ot_in:     originals.otIn     || '',
-          corrected_ot_out:    originals.otOut    || '',
+          corrected_check_in:    originals.checkIn    || '',
+          corrected_check_out:   originals.checkOut   || '',
+          corrected_check_in_2:  originals.checkIn2   || '',
+          corrected_check_out_2: originals.checkOut2  || '',
+          corrected_ot_in:       originals.otIn       || '',
+          corrected_ot_out:      originals.otOut      || '',
         }));
       }
     }).finally(() => setLoadingPunches(false));
   }, [record.id, record.employee_id, record.date]);
 
-  const origCheckIn  = originalTimes.checkIn;
-  const origCheckOut = originalTimes.checkOut;
-  const origOtIn     = originalTimes.otIn;
-  const origOtOut    = originalTimes.otOut;
+  const origCheckIn   = originalTimes.checkIn;
+  const origCheckOut  = originalTimes.checkOut;
+  const origCheckIn2  = originalTimes.checkIn2;
+  const origCheckOut2 = originalTimes.checkOut2;
+  const origOtIn      = originalTimes.otIn;
+  const origOtOut     = originalTimes.otOut;
 
   const showOtSection = origOtIn || origOtOut || correction.corrected_ot_in || correction.corrected_ot_out;
 
   const hasCorrectedTime = existingCorrection != null || [
-    [correction.corrected_check_in,  originalTimes.checkIn],
-    [correction.corrected_check_out, originalTimes.checkOut],
-    [correction.corrected_ot_in,     originalTimes.otIn],
-    [correction.corrected_ot_out,    originalTimes.otOut],
+    [correction.corrected_check_in,    originalTimes.checkIn],
+    [correction.corrected_check_out,   originalTimes.checkOut],
+    [correction.corrected_check_in_2,  originalTimes.checkIn2],
+    [correction.corrected_check_out_2, originalTimes.checkOut2],
+    [correction.corrected_ot_in,       originalTimes.otIn],
+    [correction.corrected_ot_out,      originalTimes.otOut],
   ].some(([corr, orig]) => corr && corr !== (orig || ''));
 
   async function handleSave() {
@@ -258,8 +272,10 @@ function EditModal({ record, onClose, onSaved, userRole }) {
       if (hasCorrectedTime) {
         await api.post('/attendance/corrections', {
           attendance_daily_id: record.id,
-          corrected_check_in:  correction.corrected_check_in  || undefined,
-          corrected_check_out: correction.corrected_check_out || undefined,
+          corrected_check_in:    correction.corrected_check_in    || undefined,
+          corrected_check_out:   correction.corrected_check_out   || undefined,
+          corrected_check_in_2:  isTwoShift ? (correction.corrected_check_in_2  || undefined) : undefined,
+          corrected_check_out_2: isTwoShift ? (correction.corrected_check_out_2 || undefined) : undefined,
           corrected_ot_in:     correction.corrected_ot_in     || undefined,
           corrected_ot_out:    correction.corrected_ot_out    || undefined,
           note: correction.note || undefined,
@@ -358,6 +374,10 @@ function EditModal({ record, onClose, onSaved, userRole }) {
                 );
               })()}
 
+              {isTwoShift && (
+                <p className="text-xs font-semibold text-gray-500">{t('attendance.shift1')}</p>
+              )}
+
               {/* Check-In row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -389,6 +409,44 @@ function EditModal({ record, onClose, onSaved, userRole }) {
                   )}
                 </div>
               </div>
+
+              {isTwoShift && (
+                <>
+                  <p className="text-xs font-semibold text-gray-500 pt-1">{t('attendance.shift2')}</p>
+
+                  {/* Shift 2 Check-In row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs text-gray-500">{t('attendance.checkIn')} — {t('attendance.original')}</Label>
+                      <div className="mt-1 text-sm text-gray-600 font-mono">{origCheckIn2 || '—'}</div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">{t('attendance.checkIn')} — {t('attendance.corrected')}</Label>
+                      <input type="time" value={correction.corrected_check_in_2}
+                        onChange={e => setCorrection(c => ({ ...c, corrected_check_in_2: e.target.value }))}
+                        className={timeInputClass} />
+                    </div>
+                  </div>
+
+                  {/* Shift 2 Check-Out row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs text-gray-500">{t('attendance.checkOut')} — {t('attendance.original')}</Label>
+                      <div className="mt-1 text-sm text-gray-600 font-mono">{origCheckOut2 || '—'}</div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">{t('attendance.checkOut')} — {t('attendance.corrected')}</Label>
+                      <input type="time" value={correction.corrected_check_out_2}
+                        onChange={e => setCorrection(c => ({ ...c, corrected_check_out_2: e.target.value }))}
+                        className={timeInputClass} />
+                      {correction.corrected_check_out_2 && correction.corrected_check_in_2 &&
+                        parseInt(correction.corrected_check_out_2.split(':')[0], 10) < 8 && (
+                        <p className="text-xs text-blue-600 mt-0.5">+1 (next day)</p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* OT rows — only when OT punches exist or a correction already has OT times */}
               {showOtSection && (
