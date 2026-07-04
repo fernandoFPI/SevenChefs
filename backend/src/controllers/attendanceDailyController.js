@@ -30,7 +30,7 @@ async function getDaily(req, res) {
     const { rows } = await db.query(`
       SELECT ad.*,
              TO_CHAR(ad.date, 'YYYY-MM-DD') AS date,
-             e.name AS employee_name, e.employee_code,
+             e.name AS employee_name, e.employee_code, e.secondary_shift_id,
              s.std_hours_per_day,
              sc.name AS schedule_name
       FROM attendance_daily ad

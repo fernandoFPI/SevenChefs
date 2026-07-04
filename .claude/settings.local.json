@@ -51,7 +51,9 @@
       "PowerShell(Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\")",
       "PowerShell(Get-NetTCPConnection -State Listen | Where-Object { $_.OwningProcess -in \\(20924,20812,11588,13360,22768\\) } | Select-Object LocalAddress, LocalPort, OwningProcess)",
       "PowerShell(Stop-Process -Id 22768 -Force -ErrorAction SilentlyContinue; Stop-Process -Id 20812 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 3000 })",
-      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 3000 }; Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Select-Object ProcessId, CommandLine)"
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 3000 }; Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Select-Object ProcessId, CommandLine)",
+      "Bash(node --check src/routes/attendance.js)",
+      "Bash(node --check src/controllers/attendanceDailyController.js)"
     ]
   }
 }

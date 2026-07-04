@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { processAttendance, pairCheckPunches } = require('../services/attendanceProcessor');
+const { processAttendance, pairCheckPunches, fetchDayPunches, segmentCheckPunches } = require('../services/attendanceProcessor');
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -41,6 +41,11 @@ function punchToTime(punch) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function dateToTime(d) {
+  if (!d) return null;
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 // ── POST /api/attendance/corrections ─────────────────────────────────────────
 async function saveCorrection(req, res) {
   try {
@@ -48,6 +53,8 @@ async function saveCorrection(req, res) {
       attendance_daily_id,
       corrected_check_in,
       corrected_check_out,
+      corrected_check_in_2,
+      corrected_check_out_2,
       corrected_ot_in,
       corrected_ot_out,
       note,
@@ -56,27 +63,28 @@ async function saveCorrection(req, res) {
     if (!attendance_daily_id)
       return res.status(400).json({ message: 'attendance_daily_id is required' });
 
-    if (!corrected_check_in && !corrected_check_out && !corrected_ot_in && !corrected_ot_out)
+    if (!corrected_check_in && !corrected_check_out && !corrected_check_in_2 && !corrected_check_out_2
+        && !corrected_ot_in && !corrected_ot_out)
       return res.status(400).json({ message: 'At least one corrected time must be provided' });
 
     for (const [field, val] of [
-      ['corrected_check_in',  corrected_check_in],
-      ['corrected_check_out', corrected_check_out],
-      ['corrected_ot_in',     corrected_ot_in],
-      ['corrected_ot_out',    corrected_ot_out],
+      ['corrected_check_in',    corrected_check_in],
+      ['corrected_check_out',   corrected_check_out],
+      ['corrected_check_in_2',  corrected_check_in_2],
+      ['corrected_check_out_2', corrected_check_out_2],
+      ['corrected_ot_in',       corrected_ot_in],
+      ['corrected_ot_out',      corrected_ot_out],
     ]) {
       if (val && !isValidTime(val))
         return res.status(400).json({ message: `Invalid time format for ${field} — use HH:MM` });
     }
 
-    if (corrected_check_in && corrected_check_out) {
-      if (!isValidCheckout(corrected_check_in, corrected_check_out))
-        return res.status(400).json({ message: 'Check-out must be after check-in' });
-    }
-    if (corrected_ot_in && corrected_ot_out) {
-      if (!isValidCheckout(corrected_ot_in, corrected_ot_out))
-        return res.status(400).json({ message: 'OT check-out must be after OT check-in' });
-    }
+    if (corrected_check_in && corrected_check_out && !isValidCheckout(corrected_check_in, corrected_check_out))
+      return res.status(400).json({ message: 'Check-out must be after check-in' });
+    if (corrected_check_in_2 && corrected_check_out_2 && !isValidCheckout(corrected_check_in_2, corrected_check_out_2))
+      return res.status(400).json({ message: 'Shift 2 check-out must be after check-in' });
+    if (corrected_ot_in && corrected_ot_out && !isValidCheckout(corrected_ot_in, corrected_ot_out))
+      return res.status(400).json({ message: 'OT check-out must be after OT check-in' });
 
     // Load attendance_daily record
     const { rows: daily } = await db.query(
@@ -89,107 +97,61 @@ async function saveCorrection(req, res) {
 
     const { employee_id, date } = daily[0];
 
-    // Load employee shift for std_hours and OT mode setting in parallel
+    // Load employee shift info (primary + secondary) and OT mode setting in parallel
     const [empResult, otModeResult] = await Promise.all([
       db.query(
-        `SELECT s.std_hours_per_day FROM employees e
-         LEFT JOIN shifts s ON s.id = e.shift_id
+        `SELECT e.secondary_shift_id, s.std_hours_per_day, s2.std_hours_per_day AS secondary_std_hours
+         FROM employees e
+         LEFT JOIN shifts s  ON s.id  = e.shift_id
+         LEFT JOIN shifts s2 ON s2.id = e.secondary_shift_id
          WHERE e.id = $1`,
         [employee_id]
       ),
       db.query(`SELECT value FROM system_settings WHERE key = 'ot_calculation_mode'`),
     ]);
-    const stdHours = parseFloat(empResult.rows[0]?.std_hours_per_day) || 8;
-    const otMode   = otModeResult.rows[0]?.value || 'OT_PUNCH';
+    const empRow         = empResult.rows[0] || {};
+    const isTwoShift     = !!empRow.secondary_shift_id;
+    const primaryHours   = parseFloat(empRow.std_hours_per_day)   || 8;
+    const secondaryHours = parseFloat(empRow.secondary_std_hours) || 0;
+    const stdHours       = primaryHours + (isTwoShift ? secondaryHours : 0);
+    const otMode         = otModeResult.rows[0]?.value || 'OT_PUNCH';
 
-    // Load raw punches for that day (ascending), applying the same cross-midnight
-    // rule as attendanceProcessor.js: an early-morning (<05:00 Asia/Baghdad)
-    // Check-Out belongs to the PREVIOUS calendar day's shift, not the day it's
-    // timestamped on. Without this, a night-shift's real closing punch falls
-    // into the next day's window and this query instead picks up the previous
-    // night's leftover checkout, producing a bogus IN→OUT pairing.
-    const { rows: rawPunches } = await db.query(
-      `SELECT punch_time, COALESCE(overridden_state, punch_state) AS punch_state
-       FROM attendance_raw
-       WHERE employee_id = $1
-         AND is_ignored = false
-         AND (
-           (
-             DATE(punch_time AT TIME ZONE 'Asia/Baghdad') = $2::date
-             AND NOT (
-               COALESCE(overridden_state, punch_state) = '1'
-               AND (EXTRACT(HOUR   FROM punch_time AT TIME ZONE 'Asia/Baghdad') * 60
-                  + EXTRACT(MINUTE FROM punch_time AT TIME ZONE 'Asia/Baghdad')) < 300
-             )
-           )
-           OR (
-             DATE(punch_time AT TIME ZONE 'Asia/Baghdad') = ($2::date + INTERVAL '1 day')
-             AND COALESCE(overridden_state, punch_state) = '1'
-             AND (EXTRACT(HOUR   FROM punch_time AT TIME ZONE 'Asia/Baghdad') * 60
-                + EXTRACT(MINUTE FROM punch_time AT TIME ZONE 'Asia/Baghdad')) < 300
-           )
-         )
-       ORDER BY punch_time ASC`,
-      [employee_id, date]
-    );
-
-    const inPunches   = rawPunches.filter(p => String(p.punch_state) === '0');
-    const outPunches  = rawPunches.filter(p => String(p.punch_state) === '1');
-    const stdPunches  = rawPunches.filter(p => ['0','1','2','3'].includes(String(p.punch_state)));
-    const otInPunch   = rawPunches.find(p => String(p.punch_state) === '4');
-    const otOutPunches = rawPunches.filter(p => String(p.punch_state) === '5');
-    const otOutPunch  = otOutPunches.length ? otOutPunches[otOutPunches.length - 1] : null;
-
-    const original_check_in  = inPunches.length  > 0 ? punchToTime(inPunches[0])                   : null;
-    const original_check_out = outPunches.length > 0 ? punchToTime(outPunches[outPunches.length - 1]) : null;
-    const original_ot_in     = punchToTime(otInPunch);
-    const original_ot_out    = punchToTime(otOutPunch);
-
-    // Effective OT times: corrected if provided, else original
-    const effOtIn  = corrected_ot_in  || original_ot_in;
-    const effOtOut = corrected_ot_out || original_ot_out;
-
-    // Segment-aware hours calculation: pair each Check-In with the NEXT
-    // Check-Out in chronological order (same rule as attendanceProcessor's
-    // calcDaySplit), so a day with more than one IN/OUT never gets bridged
-    // across a gap where a punch is actually missing. A correction only ever
-    // overrides the day's first check-in and/or last check-out; every other
-    // punch in between is left untouched.
+    // Load this day's punches (cross-midnight aware, shared with attendanceProcessor.js)
+    // and split them into per-shift segments: segment 1 is the day's first
+    // Check-In through its Check-Out, segment 2 is the second shift's pair
+    // (only meaningful for two-shift employees). A correction only ever
+    // overrides one segment's IN and/or OUT; every other punch is untouched.
+    const rawPunches = await fetchDayPunches(employee_id, date);
     const stdCheckPunches = rawPunches
       .filter(p => ['0', '1'].includes(String(p.punch_state)))
       .map(p => ({ time: new Date(p.punch_time), state: String(p.punch_state) }));
+    const segments = segmentCheckPunches(stdCheckPunches);
+    const seg1 = segments[0] || { in: null, out: null };
+    const seg2 = segments[1] || { in: null, out: null };
 
-    if (corrected_check_in) {
-      const [h, m]  = corrected_check_in.split(':').map(Number);
-      const firstIn = stdCheckPunches.find(p => p.state === '0');
-      if (firstIn) {
-        firstIn.time = new Date(firstIn.time);
-        firstIn.time.setHours(h, m, 0, 0);
-      } else {
-        const t = new Date(`${date}T00:00:00`);
-        t.setHours(h, m, 0, 0);
-        stdCheckPunches.push({ time: t, state: '0' });
-      }
-    }
-    if (corrected_check_out) {
-      const [h, m] = corrected_check_out.split(':').map(Number);
-      const outs   = stdCheckPunches.filter(p => p.state === '1');
-      if (outs.length) {
-        const lastOut = outs[outs.length - 1];
-        lastOut.time  = new Date(lastOut.time);
-        lastOut.time.setHours(h, m, 0, 0);
-        if (h < 8) lastOut.time.setDate(lastOut.time.getDate() + 1); // cross-midnight checkout
-      } else {
-        const t = new Date(`${date}T00:00:00`);
-        t.setHours(h, m, 0, 0);
-        if (h < 8) t.setDate(t.getDate() + 1); // cross-midnight checkout
-        stdCheckPunches.push({ time: t, state: '1' });
-      }
-    }
-    stdCheckPunches.sort((a, b) => a.time - b.time);
+    const otInPunch    = rawPunches.find(p => String(p.punch_state) === '4');
+    const otOutPunches = rawPunches.filter(p => String(p.punch_state) === '5');
+    const otOutPunch   = otOutPunches.length ? otOutPunches[otOutPunches.length - 1] : null;
 
-    const { stdHoursWorked, missingPunch: stdMissingPunch } = pairCheckPunches(stdCheckPunches);
-    const hours_worked = stdHoursWorked;
+    const original_check_in    = dateToTime(seg1.in);
+    const original_check_out   = dateToTime(seg1.out);
+    const original_check_in_2  = isTwoShift ? dateToTime(seg2.in)  : null;
+    const original_check_out_2 = isTwoShift ? dateToTime(seg2.out) : null;
+    const original_ot_in       = punchToTime(otInPunch);
+    const original_ot_out      = punchToTime(otOutPunch);
+
+    // Effective times: corrected if provided, else original
+    const effCheckIn   = corrected_check_in  || original_check_in;
+    const effCheckOut  = corrected_check_out || original_check_out;
+    const effCheckIn2  = isTwoShift ? (corrected_check_in_2  || original_check_in_2)  : null;
+    const effCheckOut2 = isTwoShift ? (corrected_check_out_2 || original_check_out_2) : null;
+    const effOtIn      = corrected_ot_in  || original_ot_in;
+    const effOtOut     = corrected_ot_out || original_ot_out;
+
+    let hours_worked = 0;
+    if (effCheckIn && effCheckOut) hours_worked += timeDiffHours(effCheckIn, effCheckOut);
+    if (isTwoShift && effCheckIn2 && effCheckOut2) hours_worked += timeDiffHours(effCheckIn2, effCheckOut2);
+    hours_worked = round2(hours_worked);
 
     let ot_hours, late_hours;
     if (otMode === 'CALCULATED') {
@@ -200,8 +162,15 @@ async function saveCorrection(req, res) {
       late_hours = round2(Math.max(0, stdHours - hours_worked));
     }
 
-    // Determine missing_punch after correction
-    let missing_punch = stdMissingPunch;
+    // Determine missing_punch after correction (later checks take precedence,
+    // same convention as before this segment support was added)
+    let missing_punch = null;
+    if (effCheckIn && !effCheckOut) missing_punch = 'OUT';
+    if (!effCheckIn && effCheckOut) missing_punch = 'IN';
+    if (isTwoShift) {
+      if (effCheckIn2 && !effCheckOut2) missing_punch = 'OUT';
+      if (!effCheckIn2 && effCheckOut2) missing_punch = 'IN';
+    }
     if (effOtIn && !effOtOut) missing_punch = 'OT_OUT';
     if (!effOtIn && effOtOut) missing_punch = 'OT_IN';
 
@@ -209,27 +178,35 @@ async function saveCorrection(req, res) {
     await db.query(
       `INSERT INTO punch_corrections
          (attendance_daily_id, employee_id, date,
-          corrected_check_in, corrected_check_out, corrected_ot_in, corrected_ot_out,
-          original_check_in, original_check_out, original_ot_in, original_ot_out,
+          corrected_check_in, corrected_check_out, corrected_check_in_2, corrected_check_out_2,
+          corrected_ot_in, corrected_ot_out,
+          original_check_in, original_check_out, original_check_in_2, original_check_out_2,
+          original_ot_in, original_ot_out,
           note, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        ON CONFLICT (attendance_daily_id) DO UPDATE SET
-         corrected_check_in  = EXCLUDED.corrected_check_in,
-         corrected_check_out = EXCLUDED.corrected_check_out,
-         corrected_ot_in     = EXCLUDED.corrected_ot_in,
-         corrected_ot_out    = EXCLUDED.corrected_ot_out,
-         original_check_in   = EXCLUDED.original_check_in,
-         original_check_out  = EXCLUDED.original_check_out,
-         original_ot_in      = EXCLUDED.original_ot_in,
-         original_ot_out     = EXCLUDED.original_ot_out,
-         note                = EXCLUDED.note,
-         created_by          = EXCLUDED.created_by,
-         updated_at          = NOW()`,
+         corrected_check_in    = EXCLUDED.corrected_check_in,
+         corrected_check_out   = EXCLUDED.corrected_check_out,
+         corrected_check_in_2  = EXCLUDED.corrected_check_in_2,
+         corrected_check_out_2 = EXCLUDED.corrected_check_out_2,
+         corrected_ot_in       = EXCLUDED.corrected_ot_in,
+         corrected_ot_out      = EXCLUDED.corrected_ot_out,
+         original_check_in     = EXCLUDED.original_check_in,
+         original_check_out    = EXCLUDED.original_check_out,
+         original_check_in_2   = EXCLUDED.original_check_in_2,
+         original_check_out_2  = EXCLUDED.original_check_out_2,
+         original_ot_in        = EXCLUDED.original_ot_in,
+         original_ot_out       = EXCLUDED.original_ot_out,
+         note                  = EXCLUDED.note,
+         created_by            = EXCLUDED.created_by,
+         updated_at            = NOW()`,
       [
         attendance_daily_id, employee_id, date,
-        corrected_check_in  || null, corrected_check_out || null,
-        corrected_ot_in     || null, corrected_ot_out    || null,
-        original_check_in, original_check_out, original_ot_in, original_ot_out,
+        corrected_check_in   || null, corrected_check_out   || null,
+        corrected_check_in_2 || null, corrected_check_out_2 || null,
+        corrected_ot_in      || null, corrected_ot_out      || null,
+        original_check_in, original_check_out, original_check_in_2, original_check_out_2,
+        original_ot_in, original_ot_out,
         note || null, req.user.id,
       ]
     );
@@ -256,6 +233,47 @@ async function saveCorrection(req, res) {
   }
 }
 
+// ── GET /api/attendance/day-punches ────────────────────────────────────────────
+// Returns one attendance day's raw punches plus their per-shift segmentation,
+// using the same cross-midnight bucketing as the processor and the correction
+// save logic above, so the correction modal shows exactly the punches that
+// actually count for this day instead of a naive calendar-date slice.
+async function getDayPunches(req, res) {
+  try {
+    const { employee_id, date } = req.query;
+    if (!employee_id || !date)
+      return res.status(400).json({ message: 'employee_id and date are required' });
+
+    const { rows: empRows } = await db.query(
+      `SELECT secondary_shift_id FROM employees WHERE id = $1`,
+      [employee_id]
+    );
+    if (!empRows.length)
+      return res.status(404).json({ message: 'Employee not found' });
+    const isTwoShift = !!empRows[0].secondary_shift_id;
+
+    const punches = await fetchDayPunches(employee_id, date);
+    const stdCheckPunches = punches
+      .filter(p => ['0', '1'].includes(String(p.punch_state)))
+      .map(p => ({ time: new Date(p.punch_time), state: String(p.punch_state) }));
+    const segs = segmentCheckPunches(stdCheckPunches);
+
+    const segments = [0, 1].map(i => ({
+      checkIn:  dateToTime(segs[i] ? segs[i].in  : null),
+      checkOut: dateToTime(segs[i] ? segs[i].out : null),
+    }));
+
+    res.json({
+      punches: punches.map(p => ({ punch_time: p.punch_time, punch_state: p.punch_state })),
+      isTwoShift,
+      segments,
+    });
+  } catch (err) {
+    console.error('[corrections] getDayPunches:', err.message);
+    res.status(500).json({ message: 'Failed to fetch day punches' });
+  }
+}
+
 // ── GET /api/attendance/corrections/:attendance_daily_id ──────────────────────
 async function getCorrection(req, res) {
   try {
@@ -263,14 +281,18 @@ async function getCorrection(req, res) {
     const { rows } = await db.query(
       `SELECT
          pc.id, pc.attendance_daily_id, pc.employee_id,
-         TO_CHAR(pc.corrected_check_in,  'HH24:MI') AS corrected_check_in,
-         TO_CHAR(pc.corrected_check_out, 'HH24:MI') AS corrected_check_out,
-         TO_CHAR(pc.corrected_ot_in,     'HH24:MI') AS corrected_ot_in,
-         TO_CHAR(pc.corrected_ot_out,    'HH24:MI') AS corrected_ot_out,
-         TO_CHAR(pc.original_check_in,   'HH24:MI') AS original_check_in,
-         TO_CHAR(pc.original_check_out,  'HH24:MI') AS original_check_out,
-         TO_CHAR(pc.original_ot_in,      'HH24:MI') AS original_ot_in,
-         TO_CHAR(pc.original_ot_out,     'HH24:MI') AS original_ot_out,
+         TO_CHAR(pc.corrected_check_in,    'HH24:MI') AS corrected_check_in,
+         TO_CHAR(pc.corrected_check_out,   'HH24:MI') AS corrected_check_out,
+         TO_CHAR(pc.corrected_check_in_2,  'HH24:MI') AS corrected_check_in_2,
+         TO_CHAR(pc.corrected_check_out_2, 'HH24:MI') AS corrected_check_out_2,
+         TO_CHAR(pc.corrected_ot_in,       'HH24:MI') AS corrected_ot_in,
+         TO_CHAR(pc.corrected_ot_out,      'HH24:MI') AS corrected_ot_out,
+         TO_CHAR(pc.original_check_in,     'HH24:MI') AS original_check_in,
+         TO_CHAR(pc.original_check_out,    'HH24:MI') AS original_check_out,
+         TO_CHAR(pc.original_check_in_2,   'HH24:MI') AS original_check_in_2,
+         TO_CHAR(pc.original_check_out_2,  'HH24:MI') AS original_check_out_2,
+         TO_CHAR(pc.original_ot_in,        'HH24:MI') AS original_ot_in,
+         TO_CHAR(pc.original_ot_out,       'HH24:MI') AS original_ot_out,
          pc.note, pc.created_at,
          u.username AS created_by_name
        FROM punch_corrections pc
@@ -324,4 +346,4 @@ async function removeCorrection(req, res) {
   }
 }
 
-module.exports = { saveCorrection, getCorrection, removeCorrection };
+module.exports = { saveCorrection, getCorrection, removeCorrection, getDayPunches };

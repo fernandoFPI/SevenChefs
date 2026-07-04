@@ -19,6 +19,7 @@ router.get('/sync/logs',      requireAuth, requireRole(...VIEW_ROLES), ctrl.getS
 router.post('/sync/historical', requireAuth, requireRole('ADMIN'), ctrl.historicalSync);
 
 // Punch correction endpoints
+router.get('/day-punches',                         requireAuth, requireRole(...VIEW_ROLES),          correctionsCtrl.getDayPunches);
 router.post('/corrections',                        requireAuth, requireRole('ADMIN', 'ACCOUNTANT'), correctionsCtrl.saveCorrection);
 router.get('/corrections/:attendance_daily_id',    requireAuth, requireRole(...VIEW_ROLES),         correctionsCtrl.getCorrection);
 router.delete('/corrections/:attendance_daily_id', requireAuth, requireRole('ADMIN'),               correctionsCtrl.removeCorrection);

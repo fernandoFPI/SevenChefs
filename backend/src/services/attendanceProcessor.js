@@ -96,6 +96,67 @@ const STD_STATES  = new Set(['0', '1', '2', '3']);
 const OT_IN_STATE  = '4';
 const OT_OUT_STATE = '5';
 
+// Fetches every raw punch belonging to one employee's attendance day, applying
+// the same cross-midnight carry-back rule used everywhere else in this file:
+// an early-morning (<05:00 Asia/Baghdad) Check-Out belongs to the PREVIOUS
+// calendar day's shift, not the day it's timestamped on. Without this, a
+// night-shift's real closing punch falls into the next day's window and a
+// naive calendar-day query instead picks up the previous night's leftover
+// checkout.
+async function fetchDayPunches(employeeId, dateStr) {
+  const { rows } = await db.query(
+    `SELECT id, punch_time, COALESCE(overridden_state, punch_state) AS punch_state
+     FROM attendance_raw
+     WHERE employee_id = $1
+       AND is_ignored = false
+       AND (
+         (
+           DATE(punch_time AT TIME ZONE 'Asia/Baghdad') = $2::date
+           AND NOT (
+             COALESCE(overridden_state, punch_state) = '1'
+             AND (EXTRACT(HOUR   FROM punch_time AT TIME ZONE 'Asia/Baghdad') * 60
+                + EXTRACT(MINUTE FROM punch_time AT TIME ZONE 'Asia/Baghdad')) < 300
+           )
+         )
+         OR (
+           DATE(punch_time AT TIME ZONE 'Asia/Baghdad') = ($2::date + INTERVAL '1 day')
+           AND COALESCE(overridden_state, punch_state) = '1'
+           AND (EXTRACT(HOUR   FROM punch_time AT TIME ZONE 'Asia/Baghdad') * 60
+              + EXTRACT(MINUTE FROM punch_time AT TIME ZONE 'Asia/Baghdad')) < 300
+         )
+       )
+     ORDER BY punch_time ASC`,
+    [employeeId, dateStr]
+  );
+  return rows;
+}
+
+// Splits a chronologically-sorted list of Check-In(0)/Check-Out(1) punches into
+// segments — one per shift. Each Check-In opens a segment; the next Check-Out
+// closes it. A Check-In seen while a segment is still open means the previous
+// segment's checkout was never punched, so it's pushed as-is (out: null) and a
+// new segment starts. A trailing open segment (no closing Check-Out) is
+// likewise pushed with out: null. A Check-Out with no open segment is pushed
+// as its own segment with in: null.
+function segmentCheckPunches(checkPunches) {
+  const segments = [];
+  let current = null;
+  for (const p of checkPunches) {
+    if (p.state === '0') {
+      if (current) segments.push(current);
+      current = { in: p.time, out: null };
+    } else if (current) {
+      current.out = p.time;
+      segments.push(current);
+      current = null;
+    } else {
+      segments.push({ in: null, out: p.time });
+    }
+  }
+  if (current) segments.push(current);
+  return segments;
+}
+
 // Pairs each Check-In (0) with the NEXT Check-Out (1) by state, in chronological
 // order — not by array position. A Check-In seen while a segment is still open
 // means that segment's checkout was never punched: that segment's hours are
@@ -588,4 +649,4 @@ async function processAttendance(options = {}) {
   return processed;
 }
 
-module.exports = { processAttendance, pairCheckPunches };
+module.exports = { processAttendance, pairCheckPunches, fetchDayPunches, segmentCheckPunches };
