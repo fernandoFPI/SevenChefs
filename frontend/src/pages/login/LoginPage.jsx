@@ -46,37 +46,28 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="absolute top-4 end-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="absolute top-4 end-4 z-10">
         <LanguageToggle />
       </div>
 
-      {/* Company branding above the card */}
-      {(companyLogo || companyName) && (
-        <div className="text-center mb-6">
-          {companyLogo && (
-            <img
-              src={companyLogo}
-              alt={companyName || 'Logo'}
-              style={{ maxHeight: '120px', maxWidth: '250px', width: '100%', objectFit: 'contain', display: 'block', margin: '0 auto 12px auto' }}
-            />
-          )}
-          {companyName && (
-            <h1 className="text-2xl font-bold text-gray-900">{companyName}</h1>
-          )}
-          <p className="text-sm text-gray-500 mt-1">{t('app.systemName')}</p>
-        </div>
-      )}
-
-      {/* Fallback title when no branding is set */}
-      {!companyLogo && !companyName && (
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">{t('app.systemName')}</h1>
-        </div>
-      )}
-
       <Card className="w-full max-w-md shadow-lg">
         <CardContent className="pt-6">
+          {/* Company branding at the top of the card */}
+          <div className="text-center mb-6">
+            {companyLogo && (
+              <img
+                src={companyLogo}
+                alt={companyName || 'Logo'}
+                style={{ maxHeight: '110px', maxWidth: '260px', width: '100%', objectFit: 'contain', display: 'block', margin: '0 auto 12px auto' }}
+              />
+            )}
+            {companyName && (
+              <h1 className="text-2xl font-bold text-gray-900">{companyName}</h1>
+            )}
+            <p className="text-sm text-gray-500 mt-1">{t('app.systemName')}</p>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1">
               <Label htmlFor="username">{t('auth.username')}</Label>
