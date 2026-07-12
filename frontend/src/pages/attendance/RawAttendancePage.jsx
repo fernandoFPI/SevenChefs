@@ -146,8 +146,8 @@ function OverrideModal({ mode, record, onConfirm, onClose }) {
     : t('raw.confirmChangeState', { state: targetLabel });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90dvh] overflow-y-auto">
         <h3 className="text-base font-semibold">{title}</h3>
         <p className="text-sm text-gray-600">{body}</p>
         {mode?.type !== 'restore' && (
@@ -185,7 +185,7 @@ function RowActions({ record, canAct, onAction, isOpen, onToggle }) {
         {t('attendance.actions')} ▾
       </button>
       {isOpen && (
-        <div className="absolute right-0 z-30 mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+        <div className="absolute end-0 z-30 mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-lg shadow-lg py-1">
           {record.is_ignored ? (
             <button
               onClick={() => onAction('restore')}
@@ -356,7 +356,7 @@ export default function RawAttendancePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('nav.rawAttendance')}</h1>
         <button onClick={openHistory} className="text-sm text-blue-600 hover:underline">
           {t('attendance.viewSyncHistory')}
@@ -539,7 +539,7 @@ export default function RawAttendancePage() {
 
       {/* ── Pagination ── */}
       {total_pages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{fromRecord}–{toRecord} / {total}</span>
             <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPageNum(1); }}
@@ -565,6 +565,7 @@ export default function RawAttendancePage() {
               <button onClick={() => setShowHistory(false)} className="text-muted-foreground hover:text-gray-900 text-xl leading-none">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
+              <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b text-left">
@@ -596,6 +597,7 @@ export default function RawAttendancePage() {
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         </div>

@@ -53,8 +53,8 @@ function EditModal({ record, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl max-h-[90dvh] overflow-y-auto">
         <h2 className="mb-4 text-base font-semibold text-gray-900">{t('salary.editRecord')}</h2>
         <p className="mb-4 text-sm text-gray-600 font-medium">{record.employee_name}</p>
 

@@ -27,13 +27,17 @@ function timeToDecimal(timeStr) {
 
 // ── New OT / Off Request Modal ────────────────────────────────────────────────
 
-function NewRequestModal({ onClose, onDone }) {
+function NewRequestModal({ onClose, onDone, typeSettings }) {
   const { t } = useTranslation();
+  const fullDayOn    = typeSettings?.full_day_enabled    !== false;
+  const partialDayOn = typeSettings?.partial_day_enabled !== false;
+  const offRequestOn = fullDayOn || partialDayOn;
+  const defaultSubtype = fullDayOn ? 'FULL_DAY' : 'PARTIAL_DAY';
   const [type, setType]         = useState('OT_REQUEST');
   const [date, setDate]         = useState('');
   const [hours, setHours]       = useState('');
   const [reason, setReason]     = useState('');
-  const [subtype, setSubtype]   = useState('FULL_DAY');
+  const [subtype, setSubtype]   = useState(defaultSubtype);
   const [timeFrom, setTimeFrom] = useState('');
   const [timeTo, setTimeTo]     = useState('');
   const [loading, setLoading]   = useState(false);
@@ -76,19 +80,19 @@ function NewRequestModal({ onClose, onDone }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('requests.newRequest')}</h2>
         <form onSubmit={submit} className="space-y-4">
           <div>
             <Label>{t('requests.type')}</Label>
             <select
               value={type}
-              onChange={e => { setType(e.target.value); setSubtype('FULL_DAY'); }}
+              onChange={e => { setType(e.target.value); setSubtype(defaultSubtype); }}
               className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value="OT_REQUEST">{t('requests.OT_REQUEST')}</option>
-              <option value="OFF_REQUEST">{t('requests.OFF_REQUEST')}</option>
+              {offRequestOn && <option value="OFF_REQUEST">{t('requests.OFF_REQUEST')}</option>}
             </select>
           </div>
 
@@ -108,14 +112,18 @@ function NewRequestModal({ onClose, onDone }) {
             <div>
               <Label>{t('requests.dayType')}</Label>
               <div className="mt-1 flex gap-3">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="radio" value="FULL_DAY" checked={subtype === 'FULL_DAY'} onChange={() => setSubtype('FULL_DAY')} />
-                  <span className="text-sm">{t('requests.fullDay')}</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="radio" value="PARTIAL_DAY" checked={subtype === 'PARTIAL_DAY'} onChange={() => setSubtype('PARTIAL_DAY')} />
-                  <span className="text-sm">{t('requests.partialDay')}</span>
-                </label>
+                {fullDayOn && (
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" value="FULL_DAY" checked={subtype === 'FULL_DAY'} onChange={() => setSubtype('FULL_DAY')} />
+                    <span className="text-sm">{t('requests.fullDay')}</span>
+                  </label>
+                )}
+                {partialDayOn && (
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" value="PARTIAL_DAY" checked={subtype === 'PARTIAL_DAY'} onChange={() => setSubtype('PARTIAL_DAY')} />
+                    <span className="text-sm">{t('requests.partialDay')}</span>
+                  </label>
+                )}
               </div>
             </div>
           )}
@@ -220,8 +228,8 @@ function NewTimeOffModal({ balance, onClose, onDone }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('request.submitTimeOff')}</h2>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -316,16 +324,19 @@ export default function MyRequestsPage() {
   const [loading, setLoading]           = useState(true);
   const [showModal, setShowModal]       = useState(false);
   const [showTimeOff, setShowTimeOff]   = useState(false);
+  const [typeSettings, setTypeSettings] = useState({ full_day_enabled: true, partial_day_enabled: true, time_off_enabled: true });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, bal] = await Promise.allSettled([
+      const [data, bal, types] = await Promise.allSettled([
         api.get('/requests'),
         api.get('/time-off/balance'),
+        api.get('/settings/request-types'),
       ]);
-      if (data.status === 'fulfilled')  setRequests(data.value);
-      if (bal.status  === 'fulfilled')  setBalance(bal.value);
+      if (data.status  === 'fulfilled') setRequests(data.value);
+      if (bal.status   === 'fulfilled') setBalance(bal.value);
+      if (types.status === 'fulfilled') setTypeSettings(types.value);
     } finally {
       setLoading(false);
     }
@@ -338,9 +349,11 @@ export default function MyRequestsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <h1 className="text-2xl font-bold text-gray-900">{t('requests.myRequests')}</h1>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setShowTimeOff(true)}>
-            + {t('request.submitTimeOff')}
-          </Button>
+          {typeSettings.time_off_enabled !== false && (
+            <Button size="sm" variant="outline" onClick={() => setShowTimeOff(true)}>
+              + {t('request.submitTimeOff')}
+            </Button>
+          )}
           <Button size="sm" onClick={() => setShowModal(true)}>
             + {t('requests.newRequest')}
           </Button>
@@ -355,7 +368,8 @@ export default function MyRequestsPage() {
       ) : requests.length === 0 ? (
         <div className="text-center py-16 text-gray-400">{t('requests.noRequests')}</div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <>
+        <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -403,10 +417,47 @@ export default function MyRequestsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile card list */}
+        <div className="md:hidden space-y-3">
+          {requests.map(r => {
+            const isTimeOff = r.type === 'TIME_OFF_REQUEST';
+            return (
+              <div key={r.id} className="bg-white rounded-lg border border-gray-200 p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {isTimeOff ? t('request.timeOffRequest') : t(`requests.${r.type}`)}
+                    </p>
+                    {r.request_subtype === 'PARTIAL_DAY' && (
+                      <p className="text-xs text-gray-400">
+                        {t('requests.partialDay')} · {r.time_from?.slice(0,5)}–{r.time_to?.slice(0,5)}
+                      </p>
+                    )}
+                  </div>
+                  <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status] || 'bg-gray-100 text-gray-600'}`}>
+                    {t(`requests.${r.status}`)}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  {isTimeOff
+                    ? `${fmtDate(r.date_from)} → ${fmtDate(r.date_to)}`
+                    : fmtDate(r.attendance_date)}
+                  <span className="mx-1.5 text-gray-300">·</span>
+                  {isTimeOff
+                    ? `${r.total_days} ${t('common.days', 'days')}`
+                    : r.partial_hours ? `${parseFloat(r.partial_hours).toFixed(2)} hrs` : (r.hours_requested ?? '—')}
+                </p>
+                {r.reason && <p className="text-xs text-gray-500 line-clamp-2">{r.reason}</p>}
+              </div>
+            );
+          })}
+        </div>
+        </>
       )}
 
       {showModal && (
-        <NewRequestModal onClose={() => setShowModal(false)} onDone={() => { setShowModal(false); load(); }} />
+        <NewRequestModal typeSettings={typeSettings} onClose={() => setShowModal(false)} onDone={() => { setShowModal(false); load(); }} />
       )}
       {showTimeOff && (
         <NewTimeOffModal balance={balance} onClose={() => setShowTimeOff(false)} onDone={() => { setShowTimeOff(false); load(); }} />

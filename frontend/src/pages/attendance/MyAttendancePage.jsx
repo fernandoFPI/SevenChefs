@@ -75,8 +75,8 @@ export default function MyAttendancePage() {
         <SummaryCard label={t('attendance.otHours')}  value={formatHours(otTotal)} color="text-purple-600" />
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-x-auto">
+      {/* Table (desktop) */}
+      <div className="hidden md:block rounded-xl border border-gray-200 bg-white shadow-sm overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>
@@ -123,6 +123,46 @@ export default function MyAttendancePage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <p className="py-8 text-center text-sm text-gray-400">{t('common.loading')}</p>
+        ) : error ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-gray-500 mb-2">{error}</p>
+            <button onClick={fetchRecords} className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs text-white hover:bg-brand-600">Retry</button>
+          </div>
+        ) : records.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray-400">{t('common.noData')}</p>
+        ) : records.map(r => (
+          <div key={r.id} className="bg-white rounded-lg border border-gray-200 p-4 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-gray-900">{fmtDate(r.date)}</p>
+                <p className="text-xs text-gray-400">{dayName(r.date)}</p>
+              </div>
+              <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status] || 'bg-gray-100 text-gray-600'}`}>
+                {t(`status.${r.status}`, r.status)}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div>
+                <p className="text-gray-400">{t('attendance.hoursWorked')}</p>
+                <p className="font-medium text-gray-800">{parseFloat(r.hours_worked) > 0 ? formatHours(r.hours_worked) : '—'}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">{t('attendance.otHours')}</p>
+                <p className="font-medium text-purple-700">{parseFloat(r.ot_hours) > 0 ? formatHours(r.ot_hours) : '—'}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">{t('attendance.lateHours')}</p>
+                <p className="font-medium text-amber-700">{parseFloat(r.late_hours) > 0 ? formatHours(r.late_hours) : '—'}</p>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

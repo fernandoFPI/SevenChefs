@@ -24,6 +24,9 @@ const DEFAULTS = {
   grace_period_minutes:       '10',
   time_off_allowance_days:    '15',
   auto_reject_enabled:        'true',
+  request_full_day_enabled:    'true',
+  request_partial_day_enabled: 'true',
+  request_time_off_enabled:    'true',
 };
 
 const TABS = ['company', 'zkbio', 'payroll', 'attendance', 'backup', 'users'];
@@ -66,8 +69,8 @@ function UserModal({ user: editing, onClose, onSaved, t }) {
   const selectClass = 'w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4 max-h-[90dvh] overflow-y-auto">
         <h2 className="text-base font-semibold text-gray-900">
           {isEdit ? t('users.editUser') : t('users.addUser')}
         </h2>
@@ -338,6 +341,9 @@ export default function SettingsPage() {
         grace_period_minutes:     settings.grace_period_minutes,
         time_off_allowance_days:  settings.time_off_allowance_days,
         auto_reject_enabled:      settings.auto_reject_enabled,
+        request_full_day_enabled:    settings.request_full_day_enabled,
+        request_partial_day_enabled: settings.request_partial_day_enabled,
+        request_time_off_enabled:    settings.request_time_off_enabled,
       });
       setLoadedSettings(prev => ({
         ...(prev || DEFAULTS),
@@ -346,6 +352,9 @@ export default function SettingsPage() {
         grace_period_minutes:     settings.grace_period_minutes,
         time_off_allowance_days:  settings.time_off_allowance_days,
         auto_reject_enabled:      settings.auto_reject_enabled,
+        request_full_day_enabled:    settings.request_full_day_enabled,
+        request_partial_day_enabled: settings.request_partial_day_enabled,
+        request_time_off_enabled:    settings.request_time_off_enabled,
       }));
       showToast(t('settings.saved'));
     } catch (e) { showToast(e.message || 'Error'); }
@@ -447,10 +456,16 @@ export default function SettingsPage() {
     settings.grace_period_enabled     !== loaded.grace_period_enabled     ||
     settings.grace_period_minutes     !== loaded.grace_period_minutes     ||
     settings.time_off_allowance_days  !== loaded.time_off_allowance_days  ||
-    settings.auto_reject_enabled      !== loaded.auto_reject_enabled;
+    settings.auto_reject_enabled      !== loaded.auto_reject_enabled      ||
+    settings.request_full_day_enabled    !== loaded.request_full_day_enabled    ||
+    settings.request_partial_day_enabled !== loaded.request_partial_day_enabled ||
+    settings.request_time_off_enabled    !== loaded.request_time_off_enabled;
 
   const gracePeriodOn    = settings.grace_period_enabled === 'true';
   const autoRejectOn     = settings.auto_reject_enabled  === 'true';
+  const fullDayReqOn     = settings.request_full_day_enabled    !== 'false';
+  const partialDayReqOn  = settings.request_partial_day_enabled !== 'false';
+  const timeOffReqOn     = settings.request_time_off_enabled    !== 'false';
 
   if (loading) return (
     <div className="space-y-3 animate-pulse max-w-3xl">
@@ -546,7 +561,7 @@ export default function SettingsPage() {
           {/* ── TAB 2: ZKBio ────────────────────────────────────────────── */}
           {activeTab === 'zkbio' && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label={t('settings.host')}>
                   <input type="text" value={settings.zk_host} onChange={set('zk_host')}
                     className={inputClass} placeholder="192.168.1.100" />
@@ -582,7 +597,7 @@ export default function SettingsPage() {
                 </div>
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label={t('settings.syncInterval')} hint="min 5 – max 1440">
                   <input type="number" min="5" max="1440" value={settings.sync_interval_minutes}
                     onChange={set('sync_interval_minutes')} className={inputClass} />
@@ -783,6 +798,30 @@ export default function SettingsPage() {
                 <p className="text-xs text-gray-400">
                   {autoRejectOn ? t('settings.autoRejectEnabledHint') : t('settings.autoRejectDisabledHint')}
                 </p>
+
+                <div className="border-t border-gray-100 pt-3 space-y-3">
+                  <p className="text-xs font-medium text-gray-500 uppercase">{t('settings.enabledRequestTypes')}</p>
+
+                  {[
+                    { key: 'request_full_day_enabled',    on: fullDayReqOn,    label: t('settings.fullDayRequests') },
+                    { key: 'request_partial_day_enabled', on: partialDayReqOn, label: t('settings.partialDayRequests') },
+                    { key: 'request_time_off_enabled',    on: timeOffReqOn,    label: t('settings.timeOffRequests') },
+                  ].map(({ key, on, label }) => (
+                    <label key={key} className="flex items-center gap-3 cursor-pointer select-none">
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={on}
+                        onClick={() => setSettings(prev => ({ ...prev, [key]: on ? 'false' : 'true' }))}
+                        className={`relative inline-flex h-5 w-10 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none ${on ? 'bg-brand-500' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </button>
+                      <span className="text-sm text-gray-700">{label}</span>
+                    </label>
+                  ))}
+                  <p className="text-xs text-gray-400">{t('settings.enabledRequestTypesHint')}</p>
+                </div>
               </div>
 
               {attendanceChanged && (
@@ -967,7 +1006,7 @@ export default function SettingsPage() {
           {/* ── TAB 6: Users ────────────────────────────────────────────── */}
           {activeTab === 'users' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-gray-800">{t('nav.userManagement')}</p>
                 <button
                   onClick={() => setUserModal('add')}

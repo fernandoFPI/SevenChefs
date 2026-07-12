@@ -45,7 +45,7 @@ export default function EmployeeDetailPage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{employee.name}</h1>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
@@ -61,7 +61,7 @@ export default function EmployeeDetailPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">{t('employees.employeeInfo')}</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label={t('employees.code')} value={employee.employee_code} />
           <Field label={t('employees.fullName')} value={employee.name} />
           <Field label={t('employees.salary')} value={Number(employee.monthly_salary).toFixed(2)} />
@@ -72,7 +72,7 @@ export default function EmployeeDetailPage() {
           {hasPattern ? (
             <div className="col-span-2 space-y-0.5">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('employees.shiftPattern')}</p>
-              <div className="rounded-md border border-gray-200 overflow-hidden mt-1">
+              <div className="rounded-md border border-gray-200 overflow-x-auto mt-1">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
@@ -133,7 +133,7 @@ export default function EmployeeDetailPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">{t('employees.accountInfo')}</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label={t('auth.username')} value={employee.username || '—'} />
           <Field label={t('employees.role')} value={employee.user_role ? t(`roles.${employee.user_role}`) : '—'} />
           <Field

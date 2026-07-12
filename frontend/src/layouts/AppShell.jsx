@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, LayoutDashboard, Users, Clock, CalendarDays, ClipboardList, CalendarCheck, FileText, BellRing, BarChart2, DollarSign, Settings, CalendarCheck2, ArrowLeftRight, Umbrella } from 'lucide-react';
-import { NavLink, useNavigate, Link } from 'react-router-dom';
+import { Bell, Menu, X, LayoutDashboard, Users, Clock, CalendarDays, ClipboardList, CalendarCheck, FileText, BellRing, BarChart2, DollarSign, Settings, CalendarCheck2, ArrowLeftRight, Umbrella } from 'lucide-react';
+import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useCompany } from '../context/CompanyContext.jsx';
@@ -86,7 +86,7 @@ function NotificationDropdown({ onClose }) {
   }
 
   return (
-    <div className={`absolute top-12 ${isRtl ? 'left-0' : 'right-0'} w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-50`}>
+    <div className={`fixed inset-x-4 top-16 sm:absolute sm:top-12 sm:inset-x-auto ${isRtl ? 'sm:left-0' : 'sm:right-0'} sm:w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-50`}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <span className="text-sm font-semibold text-gray-800">{t('notifications.title')}</span>
         <button onClick={handleMarkAll} className="text-xs text-brand-600 hover:underline">
@@ -114,13 +114,25 @@ function NotificationDropdown({ onClose }) {
 export default function AppShell({ children }) {
   const { user, logout } = useAuth();
   const { companyName, companyLogo } = useCompany();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language === 'ar';
   const navigate = useNavigate();
+  const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bellRef = useRef(null);
 
   const navItems = NAV_ITEMS[user?.role] || NAV_ITEMS.EMPLOYEE;
+
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+
+  // Lock body scroll while the drawer is open.
+  useEffect(() => {
+    document.body.style.overflow = sidebarOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [sidebarOpen]);
 
   useEffect(() => {
     function fetchCount() {
@@ -155,8 +167,30 @@ export default function AppShell({ children }) {
 
   return (
     <div className="flex h-screen bg-gray-50">
+      {/* Backdrop — mobile drawer only */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
+      <aside
+        className={`fixed inset-y-0 start-0 z-50 w-64 bg-white border-e border-gray-200 flex flex-col transform transition-transform duration-200 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : (isRtl ? 'translate-x-full' : '-translate-x-full')
+        } lg:static lg:translate-x-0 lg:shrink-0 lg:z-auto`}
+      >
+        <div className="flex justify-end p-2 lg:hidden">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+            aria-label={t('common.close', 'Close')}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
         <div style={{ padding: '16px 12px', textAlign: 'center', borderBottom: '1px solid var(--sidebar-border, #e5e7eb)' }}>
           {companyLogo && (
             <img
@@ -192,12 +226,20 @@ export default function AppShell({ children }) {
       {/* Main area */}
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Top navbar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
-          <p className="flex-1 text-sm font-semibold text-gray-800">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between gap-2 px-4 sm:px-6 shrink-0">
+          <button
+            className="p-2 -ms-2 rounded-lg hover:bg-gray-100 text-gray-600 lg:hidden"
+            onClick={() => setSidebarOpen(true)}
+            aria-label={t('nav.openMenu', 'Open menu')}
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+
+          <p className="flex-1 min-w-0 truncate text-sm font-semibold text-gray-800 hidden sm:block">
             {companyName ? `${companyName} — ${t('app.tagline')}` : t('app.systemName')}
           </p>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 ms-auto">
             <LanguageToggle />
 
             {/* Notification bell */}
@@ -219,7 +261,7 @@ export default function AppShell({ children }) {
               )}
             </div>
 
-            <p className="text-sm font-medium text-gray-800">{user?.username}</p>
+            <p className="text-sm font-medium text-gray-800 hidden md:block">{user?.username}</p>
 
             <button
               onClick={handleLogout}
@@ -231,7 +273,7 @@ export default function AppShell({ children }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
           {children}
         </main>
       </div>

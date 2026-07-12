@@ -76,7 +76,7 @@ function GrantModal({ year, onClose, onDone }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md space-y-4 p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md space-y-4 p-6 max-h-[90dvh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900">{t('timeOff.grantTimeOff')}</h2>
 
         {/* Employee search + select */}
@@ -199,8 +199,8 @@ function AdjustModal({ employee, year, onClose, onDone }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
         <h2 className="text-lg font-semibold">{t('timeOff.adjust')} — {employee.employee_name}</h2>
         <p className="text-sm text-gray-500">
           {t('timeOff.used')}: {employee.used_days} / {employee.allowance} &nbsp;·&nbsp; {t('timeOff.remaining')}: {employee.remaining}
@@ -268,7 +268,7 @@ export default function TimeOffBalancesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('nav.timeOffBalances')}</h1>
         <div className="flex items-center gap-2">
           {canGrant && (

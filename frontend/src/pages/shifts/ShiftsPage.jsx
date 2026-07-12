@@ -27,8 +27,8 @@ function ShiftModal({ open, title, form, errors, loading, onChange, onSave, onCl
   const computedHours = isDuration ? null : computeHours(form.shift_start, form.shift_end);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-6">
         <h2 className="text-lg font-semibold mb-4">{title}</h2>
         <div className="space-y-4">
           <div className="space-y-1">
@@ -244,7 +244,7 @@ export default function ShiftsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('shifts.title')}</h1>
         <Button onClick={openAdd}>{t('shifts.addShift')}</Button>
       </div>

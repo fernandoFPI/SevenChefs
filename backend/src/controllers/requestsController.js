@@ -5,6 +5,7 @@ const {
   notifyEmployeeOfDecision,
 } = require('../services/notificationService');
 const { getOrCreateBalance } = require('./timeOffController');
+const { processAttendance } = require('../services/attendanceProcessor');
 
 // ── Working-days helper ───────────────────────────────────────────────────────
 // Returns count of days in [dateFrom, dateTo] that fall on the employee's
@@ -39,6 +40,9 @@ async function getRequests(req, res) {
 
     let baseQuery = `
       SELECT r.*,
+             r.attendance_date::text AS attendance_date,
+             r.date_from::text       AS date_from,
+             r.date_to::text         AS date_to,
              e.name AS employee_name,
              e.employee_code,
              mu.username AS manager_username,
@@ -126,6 +130,20 @@ async function createRequest(req, res) {
       }
       if (date_to < date_from) {
         return res.status(400).json({ error: 'date_to must be >= date_from' });
+      }
+    }
+
+    // Per-type enable/disable switches (admin-controlled in Settings)
+    const disabledKey =
+      type === 'TIME_OFF_REQUEST' ? 'request_time_off_enabled'
+      : type === 'OFF_REQUEST'    ? (subtype === 'PARTIAL_DAY' ? 'request_partial_day_enabled' : 'request_full_day_enabled')
+      : null;
+    if (disabledKey) {
+      const { rows: sett } = await query(
+        'SELECT value FROM system_settings WHERE key = $1', [disabledKey]
+      );
+      if (sett[0]?.value === 'false') {
+        return res.status(403).json({ error: 'This request type is currently disabled by the administrator' });
       }
     }
 
@@ -314,14 +332,21 @@ async function adminAction(req, res) {
       );
     }
 
-    // OFF_REQUEST full-day approval: create leave record
+    // OFF_REQUEST full-day approval: record an unpaid schedule-style OFF day
     if (action === 'APPROVE' && request.type === 'OFF_REQUEST' && request.request_subtype !== 'PARTIAL_DAY') {
       await query(
         `INSERT INTO leave_records (employee_id, date, leave_type, created_by)
-         VALUES ($1, $2, 'PAID', $3)
-         ON CONFLICT (employee_id, date) DO UPDATE SET leave_type = 'PAID'`,
+         VALUES ($1, $2, 'OFF', $3)
+         ON CONFLICT (employee_id, date) DO UPDATE SET leave_type = 'OFF', created_by = EXCLUDED.created_by`,
         [request.employee_id, request.attendance_date, userId]
       );
+      // Materialize the OFF status now — periodic recompute only covers the
+      // current month, so future-month dates would otherwise stay empty.
+      await processAttendance({
+        employeeIds: [request.employee_id],
+        dateFrom:    request.attendance_date,
+        dateTo:      request.attendance_date,
+      });
     }
 
     // Partial-day off approval: update attendance_daily for that day
