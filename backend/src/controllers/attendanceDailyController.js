@@ -148,7 +148,7 @@ async function recordLeave(req, res) {
          leave_type = EXCLUDED.leave_type,
          note       = EXCLUDED.note,
          created_by = EXCLUDED.created_by`,
-      [employee_id, date, leave_type, req.user.id, note || null]
+      [employee_id, date, leave_type, req.user.userId, note || null]
     );
 
     // 2. Upsert attendance_daily for that date.

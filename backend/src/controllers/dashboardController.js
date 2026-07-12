@@ -5,7 +5,7 @@ async function getDashboard(req, res) {
   try {
     const role = req.user.role;
     if (role === 'EMPLOYEE') {
-      return res.json(await employeeDashboard(req.user.id));
+      return res.json(await employeeDashboard(req.user.userId));
     }
     return res.json(await adminDashboard());
   } catch (err) {

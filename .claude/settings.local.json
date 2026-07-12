@@ -53,7 +53,22 @@
       "PowerShell(Stop-Process -Id 22768 -Force -ErrorAction SilentlyContinue; Stop-Process -Id 20812 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 3000 })",
       "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 3000 }; Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Select-Object ProcessId, CommandLine)",
       "Bash(node --check src/routes/attendance.js)",
-      "Bash(node --check src/controllers/attendanceDailyController.js)"
+      "Bash(node --check src/controllers/attendanceDailyController.js)",
+      "Bash(docker --version)",
+      "Bash(psql --version)",
+      "PowerShell(& \"C:\\\\Program Files\\\\PostgreSQL\\\\18\\\\bin\\\\psql.exe\" -U postgres -h localhost -c \"SELECT version\\(\\);\")",
+      "PowerShell($env:PGPASSWORD = \"admin\"; & \"C:\\\\Program Files\\\\PostgreSQL\\\\18\\\\bin\\\\psql.exe\" -U postgres -h localhost -c \"SELECT version\\(\\);\" 2>&1)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 7572 -Force -ErrorAction SilentlyContinue)",
+      "Bash(curl -s http://localhost:3000/api/company-info)",
+      "Bash(git check-ignore *)",
+      "Bash(git status *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)",
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 3000 -or $_.LocalPort -eq 5173 } | Select-Object LocalPort, OwningProcess; Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Select-Object ProcessId, CommandLine)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Select-Object ProcessId, CommandLine; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 3000 -or $_.LocalPort -eq 5173 } | Select-Object LocalPort, OwningProcess)",
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 3000 -or $_.LocalPort -eq 5173 } | Select-Object LocalPort, OwningProcess)",
+      "Bash(curl -s -i \"http://localhost:3000/api/employees/me/attendance?month=2026-07\" -H \"Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImJhZmU5NjM1LWMwMjQtNDY5Ni04YzE5LTU4NGNhY2NmNzUxOCIsInVzZXJuYW1lIjoiTWFyZGVlbiBCYXNoZWVyIiwicm9sZSI6IkVNUExPWUVFIiwicmVxdWlyZXNQYXNzd29yZENoYW5nZSI6ZmFsc2UsImlhdCI6MTc4Mzg2MzMyOCwiZXhwIjoxNzgzODYzNjI4fQ.vsesLBUcMjxaFHc-IyCBWnXsng0qHEO4cPe_9Sy-FyE\")"
     ]
   }
 }

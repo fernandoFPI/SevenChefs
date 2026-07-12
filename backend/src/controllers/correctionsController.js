@@ -207,7 +207,7 @@ async function saveCorrection(req, res) {
         corrected_ot_in      || null, corrected_ot_out      || null,
         original_check_in, original_check_out, original_check_in_2, original_check_out_2,
         original_ot_in, original_ot_out,
-        note || null, req.user.id,
+        note || null, req.user.userId,
       ]
     );
 

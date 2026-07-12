@@ -121,7 +121,7 @@ async function approveOne(req, res) {
        SET status = 'APPROVED', approved_at = NOW(), approved_by = $1, updated_at = NOW()
        WHERE id = $2 AND status = 'SUBMITTED'
        RETURNING *`,
-      [req.user.id, id]
+      [req.user.userId, id]
     );
     if (!rows.length) return res.status(400).json({ message: 'Record not found or not in SUBMITTED state' });
     res.json(rows[0]);
@@ -139,7 +139,7 @@ async function approveAll(req, res) {
       `UPDATE salary_records
        SET status = 'APPROVED', approved_at = NOW(), approved_by = $1, updated_at = NOW()
        WHERE period_month = $2 AND status = 'SUBMITTED'`,
-      [req.user.id, month]
+      [req.user.userId, month]
     );
     res.json({ message: 'All approved', count: rowCount });
   } catch (err) {

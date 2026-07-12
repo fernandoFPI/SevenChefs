@@ -99,7 +99,7 @@ async function deactivate(req, res) {
 // GET /api/employees/me/attendance?month=YYYY-MM
 async function myAttendance(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { rows: empRows } = await require('../config/db').query(
       `SELECT e.id FROM employees e
        JOIN users u ON u.employee_id = e.id
