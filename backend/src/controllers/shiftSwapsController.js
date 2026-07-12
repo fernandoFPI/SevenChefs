@@ -44,7 +44,7 @@ async function list(req, res) {
 // POST /api/shift-swaps
 async function create(req, res) {
   try {
-    const { id: userId } = req.user;
+    const { userId } = req.user;
     const {
       type, covering_employee_id, cover_date,
       covered_employee_id, covered_date, swap_return_date, note,
