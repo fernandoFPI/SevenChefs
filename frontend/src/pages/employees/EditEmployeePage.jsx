@@ -97,7 +97,7 @@ export default function EditEmployeePage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('employees.editEmployee')}</h1>
         <Button variant="outline" asChild>
           <Link to={`/employees/${id}`}>{t('nav.goBack')}</Link>
@@ -110,7 +110,7 @@ export default function EditEmployeePage() {
             <CardTitle className="text-base">{t('employees.employeeInfo')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="emp-code">{t('employees.code')}</Label>
                 <Input id="emp-code" value={form.employee_code}
@@ -125,7 +125,7 @@ export default function EditEmployeePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="emp-salary">{t('employees.salary')}</Label>
                 <Input id="emp-salary" type="number" min="0" step="0.01"
@@ -189,7 +189,7 @@ export default function EditEmployeePage() {
               </>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="emp-shift">{t('employees.shift')}</Label>
                     <select id="emp-shift" value={form.shift_id}
@@ -230,7 +230,7 @@ export default function EditEmployeePage() {
                     </p>
                   );
                 })()}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="emp-schedule">{t('employees.schedule')}</Label>
                     <select id="emp-schedule" value={form.schedule_id}
@@ -260,7 +260,7 @@ export default function EditEmployeePage() {
             <CardTitle className="text-base">{t('employees.accountInfo')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="emp-username">{t('employees.username')}</Label>
                 <Input id="emp-username" value={form.username}

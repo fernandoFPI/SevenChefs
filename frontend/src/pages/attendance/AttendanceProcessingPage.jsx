@@ -63,7 +63,8 @@ function RowActionsDropdown({ record, userRole, isOpen, onToggle, onAction }) {
   const isAdminOrAcc = ADMIN_ACCOUNTANT.includes(userRole);
   const hasOt   = parseFloat(record.ot_hours)  > 0;
   const hasLate = parseFloat(record.late_hours) > 0;
-  const isLeave = record.status === 'LEAVE_PAID' || record.status === 'LEAVE_UNPAID';
+  const isLeave = record.status === 'LEAVE_PAID' || record.status === 'LEAVE_UNPAID'
+               || (record.status === 'OFF' && record.leave_record_type === 'OFF');
   const showApprovals = hasOt || hasLate;
 
   return (
@@ -76,7 +77,7 @@ function RowActionsDropdown({ record, userRole, isOpen, onToggle, onAction }) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 z-30 mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+        <div className="absolute end-0 z-30 mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-lg shadow-lg py-1">
 
           {/* Approvals */}
           {showApprovals && (
@@ -120,6 +121,15 @@ function RowActionsDropdown({ record, userRole, isOpen, onToggle, onAction }) {
             >
               <span className="w-3" />
               {t('attendance.flagUnpaidLeave')}
+            </button>
+          )}
+          {record.status !== 'OFF' && (
+            <button
+              onClick={() => onAction('flag_off')}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 text-left"
+            >
+              <span className="w-3" />
+              {t('attendance.flagOffDay')}
             </button>
           )}
           {isLeave && (
@@ -315,8 +325,8 @@ function EditModal({ record, onClose, onSaved, userRole }) {
   const timeInputClass = 'flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
         <h2 className="text-lg font-semibold">{record.employee_name} — {fmtDate(record.date)}</h2>
 
         {/* Correction banner */}
@@ -648,6 +658,14 @@ export default function AttendanceProcessingPage() {
           });
           setToast({ message: t('leave.recorded'), type: 'success' });
           break;
+        case 'flag_off':
+          await api.post('/attendance/leaves', {
+            employee_id: record.employee_id,
+            date:        String(record.date).slice(0, 10),
+            leave_type:  'OFF',
+          });
+          setToast({ message: t('leave.recorded'), type: 'success' });
+          break;
         case 'remove_leave':
           if (!window.confirm(t('attendance.confirmRemoveLeave'))) return;
           await api.delete('/attendance/leaves', {
@@ -680,7 +698,7 @@ export default function AttendanceProcessingPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('attendance.processing')}</h1>
       </div>
 

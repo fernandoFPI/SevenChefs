@@ -10,6 +10,8 @@ const ALLOWED_KEYS = new Set([
   'late_penalty_unapproved', 'late_penalty_approved',
   'ot_calculation_mode',
   'grace_period_enabled', 'grace_period_minutes',
+  'time_off_allowance_days', 'auto_reject_enabled',
+  'request_full_day_enabled', 'request_partial_day_enabled', 'request_time_off_enabled',
 ]);
 
 // GET /api/settings
@@ -46,6 +48,26 @@ async function updateSettings(req, res) {
   }
 }
 
+// GET /api/settings/request-types — readable by all authenticated users so the
+// employee portal knows which request types are currently enabled.
+async function getRequestTypeSettings(req, res) {
+  try {
+    const { rows } = await db.query(
+      `SELECT key, value FROM system_settings
+       WHERE key IN ('request_full_day_enabled', 'request_partial_day_enabled', 'request_time_off_enabled')`
+    );
+    const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    res.json({
+      full_day_enabled:    map.request_full_day_enabled    !== 'false',
+      partial_day_enabled: map.request_partial_day_enabled !== 'false',
+      time_off_enabled:    map.request_time_off_enabled    !== 'false',
+    });
+  } catch (err) {
+    console.error('[settings] request-types:', err.message);
+    res.status(500).json({ message: 'Failed to fetch request type settings' });
+  }
+}
+
 // POST /api/settings/test-connection
 async function testConnection(req, res) {
   try {
@@ -72,4 +94,4 @@ async function testConnection(req, res) {
   }
 }
 
-module.exports = { getSettings, updateSettings, testConnection };
+module.exports = { getSettings, updateSettings, testConnection, getRequestTypeSettings };

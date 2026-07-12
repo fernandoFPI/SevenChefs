@@ -547,7 +547,14 @@ async function processAttendance(options = {}) {
       // (early-morning Check-Out punches moved to the previous day by CROSS_MIDNIGHT_CUTOFF).
       const dayPunches = punchMap.get(dateStr) || [];
 
-      const leaveType  = leaveMap.get(dateStr) || null;
+      let leaveType = leaveMap.get(dateStr) || null;
+
+      // Approved day-off request: force a non-working day. Placed after the
+      // 5th-weekday and shift-swap overrides so an explicit approved OFF wins.
+      if (leaveType === 'OFF') {
+        isWorkday = false;
+        leaveType = null; // fall through to the standard !isWorkday branch
+      }
 
       let status, hoursWorked, lateHours, otHours, missingPunch;
       missingPunch = null;

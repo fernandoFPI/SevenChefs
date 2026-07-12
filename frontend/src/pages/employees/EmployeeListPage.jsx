@@ -40,7 +40,7 @@ export default function EmployeeListPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('employees.title')}</h1>
         <Button asChild>
           <Link to="/employees/new">{t('employees.addEmployee')}</Link>
@@ -73,7 +73,8 @@ export default function EmployeeListPage() {
           ) : filtered.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">{t('employees.noEmployees')}</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
@@ -126,6 +127,45 @@ export default function EmployeeListPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile card list */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {filtered.map(emp => (
+                <div key={emp.id} className={`p-4 space-y-2 ${emp.is_active ? '' : 'opacity-60'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{emp.name}</p>
+                      <p className="text-xs text-gray-500 font-mono">{emp.employee_code}</p>
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      emp.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {emp.is_active ? t('common.active') : t('common.inactive')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {emp.has_shift_pattern ? t('employees.variableShift') : (emp.shift_name || '—')}
+                    <span className="mx-1.5 text-gray-300">·</span>
+                    {emp.schedule_name || '—'}
+                  </p>
+                  <p className="text-sm font-mono text-gray-700">{formatCurrency(emp.monthly_salary, emp.currency || 'IQD')}</p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/employees/${emp.id}`}>{t('common.view')}</Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/employees/${emp.id}/edit`}>{t('common.edit')}</Link>
+                    </Button>
+                    {emp.is_active && (
+                      <Button variant="outline" size="sm" onClick={() => handleDeactivate(emp)}>
+                        {t('common.deactivate')}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            </>
           )}
         </CardContent>
       </Card>

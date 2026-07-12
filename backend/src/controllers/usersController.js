@@ -50,7 +50,7 @@ async function create(req, res) {
 async function update(req, res) {
   try {
     const { id } = req.params;
-    if (id === req.user.id)
+    if (id === req.user.userId)
       return res.status(400).json({ message: 'Cannot modify your own account' });
 
     const sets   = ['updated_at = NOW()'];
@@ -95,7 +95,7 @@ async function update(req, res) {
 async function toggleActive(req, res) {
   try {
     const { id } = req.params;
-    if (id === req.user.id)
+    if (id === req.user.userId)
       return res.status(400).json({ message: 'Cannot deactivate your own account' });
 
     const { rows } = await db.query(

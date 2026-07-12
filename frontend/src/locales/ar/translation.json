@@ -16,6 +16,7 @@
   "nav": {
     "dashboard": "لوحة التحكم",
     "notifications": "الإشعارات",
+    "openMenu": "فتح القائمة",
     "language": "English",
     "goBack": "العودة",
     "employees": "الموظفون",
@@ -62,7 +63,7 @@
     "recentPunches": "آخر البصمات",
     "noPunches": "لا توجد بصمات حديثة",
     "submitOtRequest": "طلب عمل إضافي",
-    "submitOffRequest": "طلب يوم إجازة"
+    "submitOffRequest": "طلب يوم عطلة"
   },
   "roles": {
     "ADMIN": "مدير النظام",
@@ -77,6 +78,7 @@
   "common": {
     "save": "حفظ",
     "cancel": "إلغاء",
+    "close": "إغلاق",
     "edit": "تعديل",
     "deactivate": "تعطيل",
     "reactivate": "تفعيل",
@@ -240,6 +242,7 @@
     "approveLate": "اعتماد التأخير",
     "flagPaidLeave": "تسجيل إجازة مدفوعة",
     "flagUnpaidLeave": "تسجيل إجازة غير مدفوعة",
+    "flagOffDay": "تسجيل يوم عطلة",
     "removeLeaveFlag": "إزالة علامة الإجازة",
     "confirmRemoveLeave": "هل تريد إزالة علامة الإجازة وإعادة معالجة هذا اليوم؟",
     "approvalToggled": "تم تحديث الاعتماد"
@@ -326,10 +329,10 @@
     "title": "الطلبات",
     "myRequests": "طلباتي",
     "newOtRequest": "طلب عمل إضافي جديد",
-    "newOffRequest": "طلب يوم إجازة جديد",
+    "newOffRequest": "طلب يوم عطلة جديد",
     "type": "النوع",
     "OT_REQUEST": "طلب عمل إضافي",
-    "OFF_REQUEST": "طلب يوم إجازة",
+    "OFF_REQUEST": "طلب يوم عطلة",
     "attendanceDate": "التاريخ",
     "hoursRequested": "الساعات المطلوبة",
     "reason": "السبب",
@@ -491,6 +494,11 @@
     "timeOffAllowance": "أيام الإجازة السنوية",
     "timeOffAllowanceHint": "عدد أيام الإجازة المدفوعة التي يستحقها كل موظف سنوياً. يُطبق على الموظفين الجدد وأرصدة السنة الجديدة. لا يؤثر على الأرصدة الموجودة للسنة الحالية.",
     "requestSettings": "إعدادات الطلبات",
+    "enabledRequestTypes": "أنواع الطلبات المفعّلة",
+    "enabledRequestTypesHint": "أنواع الطلبات المعطّلة تُخفى عن الموظفين ويرفضها الخادم إذا تم إرسالها.",
+    "fullDayRequests": "طلبات يوم عطلة كامل",
+    "partialDayRequests": "طلبات عطلة جزئية",
+    "timeOffRequests": "طلبات الإجازة السنوية",
     "autoRejectEnabled": "الرفض التلقائي للطلبات بعد 24 ساعة",
     "autoRejectEnabledHint": "سيتم رفض الطلبات التي لم يوافق عليها المسؤول خلال 24 ساعة من تقديمها تلقائياً. ينطبق على جميع أنواع الطلبات: العمل الإضافي والإجازات.",
     "autoRejectDisabledHint": "ستبقى الطلبات معلقة حتى تتم الموافقة عليها أو رفضها يدوياً من قبل المدير والمسؤول. لا يوجد حد زمني مفروض."

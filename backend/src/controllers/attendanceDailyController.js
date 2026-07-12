@@ -32,11 +32,13 @@ async function getDaily(req, res) {
              TO_CHAR(ad.date, 'YYYY-MM-DD') AS date,
              e.name AS employee_name, e.employee_code, e.secondary_shift_id,
              s.std_hours_per_day,
-             sc.name AS schedule_name
+             sc.name AS schedule_name,
+             lr.leave_type AS leave_record_type
       FROM attendance_daily ad
       JOIN employees e ON e.id = ad.employee_id
       LEFT JOIN shifts    s  ON s.id = e.shift_id
       LEFT JOIN schedules sc ON sc.id = e.schedule_id
+      LEFT JOIN leave_records lr ON lr.employee_id = ad.employee_id AND lr.date = ad.date
       WHERE ${conditions.join(' AND ')}
       ORDER BY e.name ASC, ad.date ASC
     `, params);
@@ -132,10 +134,11 @@ async function recordLeave(req, res) {
     const { employee_id, date, leave_type, note } = req.body;
     if (!employee_id || !date || !leave_type)
       return res.status(400).json({ message: 'employee_id, date, and leave_type are required' });
-    if (!['PAID', 'UNPAID'].includes(leave_type))
-      return res.status(400).json({ message: 'leave_type must be PAID or UNPAID' });
+    if (!['PAID', 'UNPAID', 'OFF'].includes(leave_type))
+      return res.status(400).json({ message: 'leave_type must be PAID, UNPAID, or OFF' });
 
-    const status = leave_type === 'PAID' ? 'LEAVE_PAID' : 'LEAVE_UNPAID';
+    const status = leave_type === 'OFF' ? 'OFF'
+                 : leave_type === 'PAID' ? 'LEAVE_PAID' : 'LEAVE_UNPAID';
 
     // 1. Upsert leave record.
     await db.query(
@@ -145,7 +148,7 @@ async function recordLeave(req, res) {
          leave_type = EXCLUDED.leave_type,
          note       = EXCLUDED.note,
          created_by = EXCLUDED.created_by`,
-      [employee_id, date, leave_type, req.user.id, note || null]
+      [employee_id, date, leave_type, req.user.userId, note || null]
     );
 
     // 2. Upsert attendance_daily for that date.

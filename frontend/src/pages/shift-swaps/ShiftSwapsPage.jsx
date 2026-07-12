@@ -58,8 +58,8 @@ function RecordModal({ employees, onClose, onSaved }) {
   const selectClass = inputClass;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl space-y-4 max-h-[90dvh] overflow-y-auto">
         <h2 className="text-base font-semibold text-gray-900">{t('shiftSwap.recordCoverSwap')}</h2>
         {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -75,7 +75,7 @@ function RecordModal({ employees, onClose, onSaved }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">{t('shiftSwap.coveringEmployee')}</label>
             <select value={coveringId} onChange={e => setCoveringId(e.target.value)} className={selectClass}>
@@ -92,7 +92,7 @@ function RecordModal({ employees, onClose, onSaved }) {
         </div>
 
         {type === 'SWAP' && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">{t('shiftSwap.coveredEmployee')}</label>
               <select value={coveredId} onChange={e => setCoveredId(e.target.value)} className={selectClass}>

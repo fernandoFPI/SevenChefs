@@ -41,8 +41,8 @@ function ActionModal({ request, role, onClose, onDone }) {
   const isTimeOff = request.type === 'TIME_OFF_REQUEST';
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-1">{request.employee_name}</h2>
         <p className="text-sm text-gray-500 mb-1">
           {t(`requests.${request.type}`)}
@@ -171,7 +171,8 @@ export default function RequestsPage() {
       ) : relevantRequests.length === 0 ? (
         <div className="text-center py-16 text-gray-400">{t('requests.noRequests')}</div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <>
+        <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -224,6 +225,39 @@ export default function RequestsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile card list */}
+        <div className="md:hidden space-y-3">
+          {relevantRequests.map(r => {
+            const isTimeOff = r.type === 'TIME_OFF_REQUEST';
+            return (
+              <div key={r.id} className="bg-white rounded-lg border border-gray-200 p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-900">{r.employee_name}</p>
+                  <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status] || 'bg-gray-100 text-gray-600'}`}>
+                    {t(`requests.${r.status}`)}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  {isTimeOff ? t('request.timeOffRequest') : t(`requests.${r.type}`)}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {isTimeOff
+                    ? <>{fmtDate(r.date_from)} → {fmtDate(r.date_to)} · <span className="font-medium">{r.total_days} {t('common.days', 'days')}</span></>
+                    : <>{fmtDate(r.attendance_date)}{r.hours_requested ? ` · ${r.hours_requested}h` : ''}</>
+                  }
+                </p>
+                {r.reason && <p className="text-xs text-gray-500 line-clamp-2">{r.reason}</p>}
+                {canAct(r) && (
+                  <Button size="sm" variant="outline" className="w-full" onClick={() => setSelected(r)}>
+                    {t('common.actions')}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        </>
       )}
 
       {selected && (

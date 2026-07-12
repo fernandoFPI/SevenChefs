@@ -16,6 +16,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "notifications": "Notifications",
+    "openMenu": "Open menu",
     "language": "العربية",
     "goBack": "Go Back",
     "employees": "Employees",
@@ -77,6 +78,7 @@
   "common": {
     "save": "Save",
     "cancel": "Cancel",
+    "close": "Close",
     "edit": "Edit",
     "deactivate": "Deactivate",
     "reactivate": "Reactivate",
@@ -240,6 +242,7 @@
     "approveLate": "Approve Late",
     "flagPaidLeave": "Flag as Paid Leave",
     "flagUnpaidLeave": "Flag as Unpaid Leave",
+    "flagOffDay": "Flag as Off Day",
     "removeLeaveFlag": "Remove Leave Flag",
     "confirmRemoveLeave": "Remove leave flag and reprocess this day?",
     "approvalToggled": "Approval updated"
@@ -491,6 +494,11 @@
     "timeOffAllowance": "Annual Time Off Days",
     "timeOffAllowanceHint": "Number of paid time off days each employee is entitled to per year. Applied to new employees and new year balances. Does not affect existing balances for the current year.",
     "requestSettings": "Request Settings",
+    "enabledRequestTypes": "Enabled Request Types",
+    "enabledRequestTypesHint": "Disabled request types are hidden from employees and rejected by the server if submitted.",
+    "fullDayRequests": "Full-day off requests",
+    "partialDayRequests": "Partial-day off requests",
+    "timeOffRequests": "Time-off (annual leave) requests",
     "autoRejectEnabled": "Auto-Reject Requests After 24 Hours",
     "autoRejectEnabledHint": "Requests not approved by admin within 24 hours of submission will be automatically rejected. Applies to all request types: OT, Off, and Time Off requests.",
     "autoRejectDisabledHint": "Requests will remain pending until manually approved or rejected by the manager and admin. No time limit is enforced."

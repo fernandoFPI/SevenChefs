@@ -18,7 +18,7 @@ const upload = multer({
 async function createBackup(req, res) {
   try {
     const { notes } = req.body;
-    const record = await svc.createBackup(req.user.id, notes);
+    const record = await svc.createBackup(req.user.userId, notes);
     res.status(201).json(record);
   } catch (err) {
     console.error('[backup] create:', err.message);

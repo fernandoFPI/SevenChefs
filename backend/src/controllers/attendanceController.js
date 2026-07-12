@@ -177,7 +177,7 @@ async function ignorePunch(req, res) {
        SET is_ignored = true, override_reason = $1,
            overridden_by = $2, overridden_at = NOW()
        WHERE id = $3 RETURNING id`,
-      [reason || null, req.user.id, id]
+      [reason || null, req.user.userId, id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Punch not found' });
     res.json({ message: 'Punch ignored' });
@@ -219,7 +219,7 @@ async function overrideState(req, res) {
        SET overridden_state = $1, override_reason = $2,
            overridden_by = $3, overridden_at = NOW()
        WHERE id = $4 RETURNING id`,
-      [String(state), reason || null, req.user.id, id]
+      [String(state), reason || null, req.user.userId, id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Punch not found' });
     res.json({ message: 'Punch state overridden' });

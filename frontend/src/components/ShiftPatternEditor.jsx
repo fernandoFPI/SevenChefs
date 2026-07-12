@@ -26,7 +26,7 @@ export default function ShiftPatternEditor({ shifts, pattern, onRowChange, disab
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-md border border-gray-200 overflow-hidden">
+    <div className="rounded-md border border-gray-200 overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-gray-50 border-b">
           <tr>
